@@ -17,19 +17,21 @@ class AudioEngine {
   private delayFeedback: GainNode | null = null;
   private lowPass: BiquadFilterNode | null = null;
   private distortion: WaveShaperNode | null = null;
+  
+  // LFO System
   private lfo: OscillatorNode | null = null;
-  private lfoGain: GainNode | null = null;
-  private noiseBuffer: AudioBuffer | null = null;
+  private lfoFilterGain: GainNode | null = null;
+  private lfoDelayGain: GainNode | null = null; // New: Modulates delay time for pitch instability
 
-  // Cache for current state
+  private noiseBuffer: AudioBuffer | null = null;
   private currentState: SynthState | null = null;
 
   async init() {
     if (this.ctx) return;
     this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
     
-    // Create static noise buffer for efficiency
-    const bufferSize = this.ctx.sampleRate * 2; // 2 seconds of noise
+    // Static Noise Buffer
+    const bufferSize = this.ctx.sampleRate * 2;
     this.noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
     const data = this.noiseBuffer.getChannelData(0);
     for (let i = 0; i < bufferSize; i++) {
@@ -59,8 +61,8 @@ class AudioEngine {
     this.distortion.curve = this.makeDistortionCurve(0);
     this.distortion.oversample = '4x';
     
-    // 5. Convolution Reverb (Longer and denser)
-    const impulseLength = this.ctx.sampleRate * 6; // Increased to 6s
+    // 5. Convolution Reverb
+    const impulseLength = this.ctx.sampleRate * 6;
     const impulse = this.ctx.createBuffer(2, impulseLength, this.ctx.sampleRate);
     for (let channel = 0; channel < 2; channel++) {
       const impData = impulse.getChannelData(channel);
@@ -77,12 +79,18 @@ class AudioEngine {
     this.delayFeedback = this.ctx.createGain();
     this.delayFeedback.gain.value = 0.4;
 
-    // 7. LFO (Turbulence)
+    // 7. LFO System (Turbulence)
     this.lfo = this.ctx.createOscillator();
-    this.lfo.type = 'sine';
+    this.lfo.type = 'sawtooth'; // Changed to Sawtooth for sharper, more "turbulent" cuts
     this.lfo.frequency.value = 0.1;
-    this.lfoGain = this.ctx.createGain();
-    this.lfoGain.gain.value = 100;
+
+    // LFO -> Filter Freq
+    this.lfoFilterGain = this.ctx.createGain();
+    this.lfoFilterGain.gain.value = 0;
+
+    // LFO -> Delay Time (Pitch/Doppler chaos)
+    this.lfoDelayGain = this.ctx.createGain();
+    this.lfoDelayGain.gain.value = 0;
 
     // --- ROUTING CHAIN ---
     this.masterGain.connect(this.distortion);
@@ -100,8 +108,12 @@ class AudioEngine {
 
     this.compressor.connect(this.ctx.destination);
 
-    this.lfo.connect(this.lfoGain);
-    this.lfoGain.connect(this.lowPass.frequency);
+    // LFO Routing
+    this.lfo.connect(this.lfoFilterGain);
+    this.lfoFilterGain.connect(this.lowPass.frequency);
+
+    this.lfo.connect(this.lfoDelayGain);
+    this.lfoDelayGain.connect(this.delay.delayTime);
     
     this.lfo.start();
   }
@@ -122,24 +134,39 @@ class AudioEngine {
     if (!this.ctx || !this.masterGain || !this.lowPass || !this.delayFeedback || !this.distortion) return;
     
     this.currentState = state;
+    const timeConstant = 0.2; 
 
     const targetGain = 0.2 + (state.pressure * 0.6);
-    this.masterGain.gain.setTargetAtTime(targetGain, this.ctx.currentTime, 0.1);
+    this.masterGain.gain.setTargetAtTime(targetGain, this.ctx.currentTime, timeConstant);
     
-    if (this.lfo && this.lfoGain) {
-      this.lfo.frequency.setTargetAtTime(0.1 + state.turbulence * 8, this.ctx.currentTime, 0.2);
-      this.lfoGain.gain.setTargetAtTime(50 + (state.turbulence * 800), this.ctx.currentTime, 0.2);
+    // TURBULENCE LOGIC
+    if (this.lfo && this.lfoFilterGain && this.lfoDelayGain) {
+      // Speed: From 0.1Hz (drift) to 25Hz (flutter/rumble)
+      const lfoSpeed = 0.1 + Math.pow(state.turbulence, 2) * 25;
+      this.lfo.frequency.setTargetAtTime(lfoSpeed, this.ctx.currentTime, timeConstant);
+
+      // Filter Depth: Massive sweeps at high turbulence
+      // Range: 50 to 2000 Hz modulation depth
+      const filterDepth = 50 + Math.pow(state.turbulence, 2) * 3000;
+      this.lfoFilterGain.gain.setTargetAtTime(filterDepth, this.ctx.currentTime, timeConstant);
+
+      // Delay Modulation (Pitch Warping):
+      // Small amount (0.001) creates subtle chorus.
+      // Large amount (0.05) creates severe detuning/doppler.
+      const delayModDepth = state.turbulence * 0.02; 
+      this.lfoDelayGain.gain.setTargetAtTime(delayModDepth, this.ctx.currentTime, timeConstant);
     }
 
-    const minFreq = 100; // Lowered min freq for more muddy sound
+    const minFreq = 100;
     const maxFreq = 10000;
     const viscosityFreq = maxFreq - (state.viscosity * (maxFreq - minFreq)); 
-    this.lowPass.frequency.setTargetAtTime(Math.max(minFreq, viscosityFreq), this.ctx.currentTime, 0.1);
+    this.lowPass.frequency.setTargetAtTime(Math.max(minFreq, viscosityFreq), this.ctx.currentTime, timeConstant);
 
-    this.lowPass.Q.setTargetAtTime(0.5 + (state.resonance * 15), this.ctx.currentTime, 0.1);
-    this.delayFeedback.gain.setTargetAtTime(0.1 + (state.resonance * 0.85), this.ctx.currentTime, 0.1); // Increased max feedback
+    this.lowPass.Q.setTargetAtTime(0.5 + (state.resonance * 15), this.ctx.currentTime, timeConstant);
+    this.delayFeedback.gain.setTargetAtTime(0.1 + (state.resonance * 0.85), this.ctx.currentTime, timeConstant); 
 
     if (this.delay) {
+      // Base delay time
       this.delay.delayTime.setTargetAtTime(0.1 + state.diffusion * 2.5, this.ctx.currentTime, 1.0);
     }
   }
@@ -149,57 +176,47 @@ class AudioEngine {
     
     const t = this.ctx.currentTime;
     
-    // OSC 1: Main Tone (Sawtooth)
     const osc1 = this.ctx.createOscillator();
     osc1.type = 'sawtooth';
     osc1.frequency.setValueAtTime(frequency, t);
-    // Slight random detune on start for organic feel
     osc1.detune.setValueAtTime((Math.random() - 0.5) * 15, t); 
 
-    // OSC 2: Sub/Harmonic Tone (Triangle) - Detuned
     const osc2 = this.ctx.createOscillator();
     osc2.type = 'triangle';
     osc2.frequency.setValueAtTime(frequency, t);
-    osc2.detune.setValueAtTime((Math.random() - 0.5) * 25 - 15, t); // More detune
+    osc2.detune.setValueAtTime((Math.random() - 0.5) * 25 - 15, t);
 
-    // NOISE: Breath/Air texture
     const noise = this.ctx.createBufferSource();
     noise.buffer = this.noiseBuffer;
     noise.loop = true;
     
-    // Noise Filter (Bandpass to focus the "breath")
     const noiseFilter = this.ctx.createBiquadFilter();
     noiseFilter.type = 'bandpass';
     noiseFilter.frequency.value = frequency * 2;
     noiseFilter.Q.value = 1;
 
-    // TONE HIGH-PASS: Cut the fundamental to leave only "ghost" harmonics
     const toneHighPass = this.ctx.createBiquadFilter();
     toneHighPass.type = 'highpass';
-    toneHighPass.frequency.setValueAtTime(frequency * 0.9, t); // Attenuate the root frequency
+    toneHighPass.frequency.setValueAtTime(frequency * 0.9, t);
 
-    // Per-note Filter (LowPass) - Shaping the overall body
     const filter = this.ctx.createBiquadFilter();
     filter.type = 'lowpass';
     filter.frequency.setValueAtTime(frequency * 0.8, t); 
-    filter.frequency.exponentialRampToValueAtTime(frequency * 3, t + 1.5); // Slower opening
+    filter.frequency.exponentialRampToValueAtTime(frequency * 3, t + 1.5);
 
     const gain = this.ctx.createGain();
     gain.gain.setValueAtTime(0, t);
-    gain.gain.linearRampToValueAtTime(velocity * 0.6, t + 1.5); // Very slow attack (1.5s)
+    gain.gain.setTargetAtTime(velocity * 0.6, t, 0.5); 
     
-    // Mix Levels - Noise dominance
     const osc1Gain = this.ctx.createGain();
-    osc1Gain.gain.value = 0.15; // Reduced from 0.5
+    osc1Gain.gain.value = 0.15;
     
     const osc2Gain = this.ctx.createGain();
-    osc2Gain.gain.value = 0.1; // Reduced from 0.4
+    osc2Gain.gain.value = 0.1;
     
     const noiseGain = this.ctx.createGain();
-    noiseGain.gain.value = 0.6; // Increased from 0.3
+    noiseGain.gain.value = 0.6;
 
-    // Connect Graph
-    // Oscillators -> HighPass -> Gains -> MainFilter
     osc1.connect(toneHighPass);
     osc2.connect(toneHighPass);
     
@@ -224,26 +241,26 @@ class AudioEngine {
   stopNote(id: number) {
     const note = this.oscillators.get(id);
     if (note && this.ctx) {
-      const releaseTime = 1.0 + (this.currentState ? this.currentState.viscosity * 3 : 0); // Much longer tails
+      const releaseTime = 1.0 + (this.currentState ? this.currentState.viscosity * 3 : 0);
       
       const t = this.ctx.currentTime;
       note.gain.gain.cancelScheduledValues(t);
-      note.gain.gain.setValueAtTime(note.gain.gain.value, t);
-      note.gain.gain.exponentialRampToValueAtTime(0.001, t + releaseTime);
+      note.gain.gain.setTargetAtTime(0, t, releaseTime * 0.2); 
       
-      // Filter closes down on release
       note.filter.frequency.cancelScheduledValues(t);
-      note.filter.frequency.exponentialRampToValueAtTime(50, t + releaseTime);
+      note.filter.frequency.setTargetAtTime(50, t, releaseTime * 0.2);
 
       setTimeout(() => {
-        note.osc1.stop();
-        note.osc2.stop();
-        note.noise.stop();
-        note.osc1.disconnect();
-        note.osc2.disconnect();
-        note.noise.disconnect();
-        this.oscillators.delete(id);
-      }, releaseTime * 1000 + 200);
+        if (this.oscillators.has(id)) {
+            note.osc1.stop();
+            note.osc2.stop();
+            note.noise.stop();
+            note.osc1.disconnect();
+            note.osc2.disconnect();
+            note.noise.disconnect();
+            this.oscillators.delete(id);
+        }
+      }, releaseTime * 1000 + 500);
     }
   }
 
