@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Preferences } from '@capacitor/preferences';
 import { SynthState, ParameterType } from './types';
-import { audioEngine } from './services/AudioEngine';
+import { synthManager } from './services/SynthManager';
 import { fetchTitanCondition } from './services/GeminiService';
 import Visualizer from './components/Visualizer';
 import ControlSlider from './components/ControlSlider';
@@ -148,13 +148,13 @@ function App() {
 
   useEffect(() => {
     if (state.isAudioActive) {
-      audioEngine.updateParameters(state);
+      synthManager.updateParameters(state);
     }
   }, [state]);
 
   const handleStart = async () => {
-    await audioEngine.init();
-    await audioEngine.resume();
+    await synthManager.init();
+    await synthManager.resume();
     setState(prev => ({ ...prev, isAudioActive: true }));
   };
 
@@ -171,7 +171,7 @@ function App() {
     if (activeNotesRef.current.has(freq)) {
       const id = activeNotesRef.current.get(freq);
       if (id !== undefined) {
-        audioEngine.stopNote(id);
+        synthManager.stopNote(id);
         activeNotesRef.current.delete(freq);
         setPlayingFrequencies(prev => {
           const next = new Map(prev);
@@ -180,7 +180,7 @@ function App() {
         });
       }
     } else {
-      const id = audioEngine.playNote(freq, 0.7);
+      const id = synthManager.playNote(freq, 0.7);
       if (id !== undefined) {
         activeNotesRef.current.set(freq, id);
         setPlayingFrequencies(prev => {

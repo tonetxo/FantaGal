@@ -1,7 +1,8 @@
 
-import { SynthState } from '../types';
+import { SynthState } from '../../types';
+import { ISynthEngine } from '../BaseSynthEngine';
 
-class AudioEngine {
+export class CriosferaEngine implements ISynthEngine {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
   private compressor: DynamicsCompressorNode | null = null;
@@ -18,10 +19,9 @@ class AudioEngine {
   private lowPass: BiquadFilterNode | null = null;
   private distortion: WaveShaperNode | null = null;
   
-  // LFO System
   private lfo: OscillatorNode | null = null;
   private lfoFilterGain: GainNode | null = null;
-  private lfoDelayGain: GainNode | null = null; // New: Modulates delay time for pitch instability
+  private lfoDelayGain: GainNode | null = null;
 
   private noiseBuffer: AudioBuffer | null = null;
   private currentState: SynthState | null = null;
@@ -30,7 +30,6 @@ class AudioEngine {
     if (this.ctx) return;
     this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
     
-    // Static Noise Buffer
     const bufferSize = this.ctx.sampleRate * 2;
     this.noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
     const data = this.noiseBuffer.getChannelData(0);
@@ -38,7 +37,6 @@ class AudioEngine {
       data[i] = Math.random() * 2 - 1;
     }
     
-    // 1. Dynamics Compressor
     this.compressor = this.ctx.createDynamicsCompressor();
     this.compressor.threshold.setValueAtTime(-24, this.ctx.currentTime);
     this.compressor.knee.setValueAtTime(30, this.ctx.currentTime);
@@ -46,22 +44,18 @@ class AudioEngine {
     this.compressor.attack.setValueAtTime(0.003, this.ctx.currentTime);
     this.compressor.release.setValueAtTime(0.25, this.ctx.currentTime);
 
-    // 2. Master Gain
     this.masterGain = this.ctx.createGain();
     this.masterGain.gain.value = 0.5;
 
-    // 3. Global LowPass Filter
     this.lowPass = this.ctx.createBiquadFilter();
     this.lowPass.type = 'lowpass';
     this.lowPass.frequency.value = 2000;
     this.lowPass.Q.value = 1;
 
-    // 4. Distortion
     this.distortion = this.ctx.createWaveShaper();
     this.distortion.curve = this.makeDistortionCurve(0);
     this.distortion.oversample = '4x';
     
-    // 5. Convolution Reverb
     const impulseLength = this.ctx.sampleRate * 6;
     const impulse = this.ctx.createBuffer(2, impulseLength, this.ctx.sampleRate);
     for (let channel = 0; channel < 2; channel++) {
@@ -73,26 +67,21 @@ class AudioEngine {
     this.reverb = this.ctx.createConvolver();
     this.reverb.buffer = impulse;
 
-    // 6. Delay (Atmosphere)
     this.delay = this.ctx.createDelay(4.0);
     this.delay.delayTime.value = 0.5;
     this.delayFeedback = this.ctx.createGain();
     this.delayFeedback.gain.value = 0.4;
 
-    // 7. LFO System (Turbulence)
     this.lfo = this.ctx.createOscillator();
-    this.lfo.type = 'sawtooth'; // Changed to Sawtooth for sharper, more "turbulent" cuts
+    this.lfo.type = 'sawtooth';
     this.lfo.frequency.value = 0.1;
 
-    // LFO -> Filter Freq
     this.lfoFilterGain = this.ctx.createGain();
     this.lfoFilterGain.gain.value = 0;
 
-    // LFO -> Delay Time (Pitch/Doppler chaos)
     this.lfoDelayGain = this.ctx.createGain();
     this.lfoDelayGain.gain.value = 0;
 
-    // --- ROUTING CHAIN ---
     this.masterGain.connect(this.distortion);
     this.distortion.connect(this.lowPass);
 
@@ -108,7 +97,6 @@ class AudioEngine {
 
     this.compressor.connect(this.ctx.destination);
 
-    // LFO Routing
     this.lfo.connect(this.lfoFilterGain);
     this.lfoFilterGain.connect(this.lowPass.frequency);
 
@@ -139,20 +127,13 @@ class AudioEngine {
     const targetGain = 0.2 + (state.pressure * 0.6);
     this.masterGain.gain.setTargetAtTime(targetGain, this.ctx.currentTime, timeConstant);
     
-    // TURBULENCE LOGIC
     if (this.lfo && this.lfoFilterGain && this.lfoDelayGain) {
-      // Speed: From 0.1Hz (drift) to 25Hz (flutter/rumble)
       const lfoSpeed = 0.1 + Math.pow(state.turbulence, 2) * 25;
       this.lfo.frequency.setTargetAtTime(lfoSpeed, this.ctx.currentTime, timeConstant);
 
-      // Filter Depth: Massive sweeps at high turbulence
-      // Range: 50 to 2000 Hz modulation depth
       const filterDepth = 50 + Math.pow(state.turbulence, 2) * 3000;
       this.lfoFilterGain.gain.setTargetAtTime(filterDepth, this.ctx.currentTime, timeConstant);
 
-      // Delay Modulation (Pitch Warping):
-      // Small amount (0.001) creates subtle chorus.
-      // Large amount (0.05) creates severe detuning/doppler.
       const delayModDepth = state.turbulence * 0.02; 
       this.lfoDelayGain.gain.setTargetAtTime(delayModDepth, this.ctx.currentTime, timeConstant);
     }
@@ -166,7 +147,6 @@ class AudioEngine {
     this.delayFeedback.gain.setTargetAtTime(0.1 + (state.resonance * 0.85), this.ctx.currentTime, timeConstant); 
 
     if (this.delay) {
-      // Base delay time
       this.delay.delayTime.setTargetAtTime(0.1 + state.diffusion * 2.5, this.ctx.currentTime, 1.0);
     }
   }
@@ -270,5 +250,3 @@ class AudioEngine {
     }
   }
 }
-
-export const audioEngine = new AudioEngine();
