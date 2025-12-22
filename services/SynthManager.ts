@@ -1,24 +1,33 @@
-
 import { SynthState } from '../types';
 import { ISynthEngine } from './BaseSynthEngine';
 import { CriosferaEngine } from './engines/CriosferaEngine';
+import { GearheartEngine } from './engines/GearheartEngine';
 
 class SynthManager {
   private activeEngine: ISynthEngine;
   private engines: Map<string, ISynthEngine>;
+  private ctx: AudioContext | null = null;
 
   constructor() {
     this.engines = new Map();
-    // Instanciar motores
     const criosfera = new CriosferaEngine();
-    this.engines.set('criosfera', criosfera);
+    const gearheart = new GearheartEngine();
     
-    // Set default
+    this.engines.set('criosfera', criosfera);
+    this.engines.set('gearheart', gearheart);
+    
     this.activeEngine = criosfera;
   }
 
   async init() {
-    await this.activeEngine.init();
+    if (!this.ctx) {
+      this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    
+    // Inicializamos todos os motores co MESMO contexto
+    for (const engine of this.engines.values()) {
+      engine.init(this.ctx);
+    }
   }
 
   updateParameters(state: SynthState) {
@@ -34,14 +43,14 @@ class SynthManager {
   }
 
   async resume() {
-    await this.activeEngine.resume();
+    if (this.ctx && this.ctx.state === 'suspended') {
+      await this.ctx.resume();
+    }
   }
 
-  // Método para cambiar de motor no futuro
   switchEngine(engineName: string) {
     const engine = this.engines.get(engineName);
     if (engine) {
-      // Idealmente, aquí fariamos un crossfade ou stopAll
       this.activeEngine = engine;
     }
   }

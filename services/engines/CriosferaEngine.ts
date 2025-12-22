@@ -26,9 +26,8 @@ export class CriosferaEngine implements ISynthEngine {
   private noiseBuffer: AudioBuffer | null = null;
   private currentState: SynthState | null = null;
 
-  async init() {
-    if (this.ctx) return;
-    this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+  async init(ctx: AudioContext) {
+    this.ctx = ctx;
     
     const bufferSize = this.ctx.sampleRate * 2;
     this.noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);

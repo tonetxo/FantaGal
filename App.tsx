@@ -6,6 +6,7 @@ import { fetchTitanCondition } from './services/GeminiService';
 import Visualizer from './components/Visualizer';
 import ControlSlider from './components/ControlSlider';
 import BubbleXYPad from './components/BubbleXYPad';
+import GearSequencer from './components/GearSequencer';
 
 const NOTES = [
   { label: 'C2', freq: 65.41 },
@@ -17,7 +18,7 @@ const NOTES = [
   { label: 'C4', freq: 261.63 },
 ];
 
-const PARAM_LABELS: Record<string, string> = {
+const PARAM_LABELS_CRIOSFERA: Record<string, string> = {
   pressure: "PRESIÓN",
   resonance: "RESONANCIA",
   viscosity: "VISCOSIDADE",
@@ -25,87 +26,109 @@ const PARAM_LABELS: Record<string, string> = {
   diffusion: "DIFUSIÓN"
 };
 
-interface ControlsContentProps {
+const PARAM_LABELS_GEARHEART: Record<string, string> = {
+  pressure: "PRESIÓN VAPOR",
+  resonance: "RESONANCIA LATÓN",
+  viscosity: "VELOCIDADE",
+  turbulence: "COMPLEXIDADE",
+  diffusion: "DIFUSIÓN ÉTER"
+};
+
+interface ControlsPanelProps {
+  currentEngine: 'criosfera' | 'gearheart';
+  theme: any;
   state: SynthState;
   handleStart: () => void;
   updateParam: (param: ParameterType, value: number) => void;
+  labels: Record<string, string>;
   aiPrompt: string;
-  setAiPrompt: (value: string) => void;
+  setAiPrompt: (val: string) => void;
+  apiKey: string;
   generateAIPatch: () => void;
   isAiLoading: boolean;
   titanReport: string;
-  onOpenSettings: () => void; // Nova prop
-  hasApiKey: boolean;
+  setIsSettingsOpen: (isOpen: boolean) => void;
 }
 
-const ControlsContent = ({
+const ControlsPanel = ({
+  currentEngine,
+  theme,
   state,
   handleStart,
   updateParam,
+  labels,
   aiPrompt,
   setAiPrompt,
+  apiKey,
   generateAIPatch,
   isAiLoading,
   titanReport,
-  onOpenSettings,
-  hasApiKey
-}: ControlsContentProps) => (
-  <div className="flex flex-col h-full">
-    <header className="mb-8 md:mb-12 flex justify-between items-start">
-      <div>
-        <h1 className="text-2xl md:text-3xl font-bold tracking-tighter text-orange-500 mb-1">CRIOSFERA</h1>
-        <h2 className="text-[9px] md:text-[10px] uppercase tracking-[0.3em] text-orange-200/40">Modulador Atmosférico</h2>
-      </div>
-      <button onClick={onOpenSettings} className="p-2 text-stone-500 hover:text-orange-400">
-        ⚙️
-      </button>
-    </header>
-
-    {!state.isAudioActive ? (
-      <button 
-        onClick={handleStart}
-        className="w-full py-4 bg-orange-600 hover:bg-orange-500 text-white font-bold rounded-sm transition-all shadow-[0_0_20px_rgba(249,115,22,0.3)] mb-8"
-      >
-        INICIALIZAR NÚCLEO
-      </button>
-    ) : (
-      <div className="flex-1 overflow-y-auto pr-2">
-        <ControlSlider label="Presión Superficial" value={state.pressure} onChange={(v) => updateParam(ParameterType.PRESSURE, v)} />
-        <ControlSlider label="Resonancia Espectral" value={state.resonance} onChange={(v) => updateParam(ParameterType.RESONANCE, v)} />
-        <ControlSlider label="Viscosidade do Metano" value={state.viscosity} onChange={(v) => updateParam(ParameterType.VISCOSITY, v)} />
-        <ControlSlider label="Aero-Turbulencia" value={state.turbulence} onChange={(v) => updateParam(ParameterType.TURBULENCE, v)} />
-        <ControlSlider label="Difusión do Son" value={state.diffusion} onChange={(v) => updateParam(ParameterType.DIFFUSION, v)} />
-      </div>
-    )}
-
-    <div className="pt-6 border-t border-stone-800/50 mt-auto">
-      <div className="text-[10px] uppercase tracking-widest text-stone-500 mb-4">Enlace de Parche IA</div>
-      <div className="relative">
-        <input 
-          type="text" 
-          placeholder={hasApiKey ? "Descrición atmosférica..." : "Configura a API Key primeiro"}
-          value={aiPrompt}
-          onChange={(e) => setAiPrompt(e.target.value)}
-          disabled={!hasApiKey}
-          className="w-full bg-black/40 border border-stone-800 p-3 text-sm focus:outline-none focus:border-orange-500/50 transition-colors disabled:opacity-50"
-          onKeyDown={(e) => e.key === 'Enter' && generateAIPatch()}
-        />
-        <button 
-          onClick={generateAIPatch}
-          disabled={isAiLoading || !state.isAudioActive || !hasApiKey}
-          className="absolute right-2 top-1.5 p-2 text-orange-500 hover:text-orange-400 disabled:text-stone-700"
-        >
-          {isAiLoading ? '...' : '→'}
+  setIsSettingsOpen
+}: ControlsPanelProps) => (
+    <div className="flex flex-col h-full pt-4 md:pt-8">
+      <header className="mb-8 md:mb-12 flex justify-between items-start">
+        <div>
+          <h1 className={`text-2xl md:text-3xl font-bold tracking-tighter ${theme.accent} mb-1 uppercase`}>
+            {currentEngine}
+          </h1>
+          <h2 className="text-[9px] md:text-[10px] uppercase tracking-[0.3em] opacity-50">
+            {currentEngine === 'criosfera' ? 'Modulador Atmosférico' : 'Matriz de Ritmo'}
+          </h2>
+        </div>
+        <button onClick={() => setIsSettingsOpen(true)} className="hidden md:block p-2 opacity-50 hover:opacity-100">
+          ⚙️
         </button>
+      </header>
+
+      {!state.isAudioActive ? (
+        <button 
+          onClick={handleStart}
+          className={`w-full py-4 ${theme.accent} border ${theme.border} font-bold rounded-sm transition-all mb-8 bg-white/5 hover:bg-white/10`}
+        >
+          INICIALIZAR NÚCLEO
+        </button>
+      ) : (
+        <div className="flex-1 overflow-y-auto pr-2 scrollbar-thin">
+          <ControlSlider label={labels.pressure} value={state.pressure} onChange={(v) => updateParam(ParameterType.PRESSURE, v)} />
+          <ControlSlider label={labels.resonance} value={state.resonance} onChange={(v) => updateParam(ParameterType.RESONANCE, v)} />
+          <ControlSlider label={labels.viscosity} value={state.viscosity} onChange={(v) => updateParam(ParameterType.VISCOSITY, v)} />
+          <ControlSlider label={labels.turbulence} value={state.turbulence} onChange={(v) => updateParam(ParameterType.TURBULENCE, v)} />
+          <ControlSlider label={labels.diffusion} value={state.diffusion} onChange={(v) => updateParam(ParameterType.DIFFUSION, v)} />
+        </div>
+      )}
+
+      <div className={`pt-6 border-t ${theme.border} mt-auto`}>
+        <div className="text-[10px] uppercase tracking-widest opacity-50 mb-4 font-bold">
+            {currentEngine === 'criosfera' ? 'Enlace de Parche IA' : 'Xerador de Maquinaria (IA)'}
+        </div>
+        <div className="relative">
+          <input 
+            type="text" 
+            placeholder={apiKey ? "Descrición..." : "Configura a API Key"}
+            value={aiPrompt}
+            onChange={(e) => setAiPrompt(e.target.value)}
+            disabled={!apiKey}
+            className={`w-full bg-black/40 border ${theme.border} p-3 text-sm focus:outline-none transition-colors disabled:opacity-50 ${theme.text}`}
+            onKeyDown={(e) => e.key === 'Enter' && generateAIPatch()}
+          />
+          <button 
+            onClick={generateAIPatch}
+            disabled={isAiLoading || !state.isAudioActive || !apiKey}
+            className={`absolute right-2 top-1.5 p-2 ${theme.accent} disabled:opacity-30`}
+          >
+            {isAiLoading ? '...' : '→'}
+          </button>
+        </div>
+        <p className="mt-4 text-[11px] leading-relaxed italic opacity-60 min-h-[4em] max-h-[8em] overflow-y-auto font-mono">
+          {titanReport}
+        </p>
       </div>
-      <p className="mt-4 text-[11px] leading-relaxed text-stone-400 italic min-h-[4em] max-h-[8em] overflow-y-auto">
-        {titanReport}
-      </p>
     </div>
-  </div>
 );
 
 function App() {
+  const [currentEngine, setCurrentEngine] = useState<'criosfera' | 'gearheart'>('criosfera');
+  
   const [state, setState] = useState<SynthState>({
     pressure: 0.7,
     resonance: 0.6,
@@ -119,7 +142,7 @@ function App() {
   const [apiKey, setApiKey] = useState('');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAiLoading, setIsAiLoading] = useState(false);
-  const [titanReport, setTitanReport] = useState<string>('Modo sustain activo: alterna as teclas para iniciar a atmosfera.');
+  const [titanReport, setTitanReport] = useState<string>('Sistema en espera...');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
   const [xyParams, setXyParams] = useState({
@@ -130,7 +153,14 @@ function App() {
   const [playingFrequencies, setPlayingFrequencies] = useState<Map<number, number>>(new Map());
   const activeNotesRef = useRef<Map<number, number>>(new Map());
 
-  // Cargar API Key ao iniciar
+  // Labels actuais segundo motor
+  const labels = currentEngine === 'criosfera' ? PARAM_LABELS_CRIOSFERA : PARAM_LABELS_GEARHEART;
+  
+  // Theme colors
+  const theme = currentEngine === 'criosfera' 
+    ? { bg: 'bg-stone-950', text: 'text-stone-100', accent: 'text-orange-500', border: 'border-stone-800' }
+    : { bg: 'bg-[#151210]', text: 'text-[#d4c5a9]', accent: 'text-[#ffbf69]', border: 'border-[#b08d55]/30' };
+
   useEffect(() => {
     const loadKey = async () => {
       const { value } = await Preferences.get({ key: 'gemini_api_key' });
@@ -150,12 +180,20 @@ function App() {
     if (state.isAudioActive) {
       synthManager.updateParameters(state);
     }
-  }, [state]);
+  }, [state, currentEngine]);
 
   const handleStart = async () => {
     await synthManager.init();
     await synthManager.resume();
     setState(prev => ({ ...prev, isAudioActive: true }));
+  };
+
+  const handleEngineChange = (engine: 'criosfera' | 'gearheart') => {
+    setCurrentEngine(engine);
+    synthManager.switchEngine(engine);
+    setTitanReport(engine === 'criosfera' 
+      ? 'Modo sustain activo: alterna as teclas.' 
+      : 'Matriz de ritmo lista. Arrastra as engrenaxes.');
   };
 
   const updateParam = (param: ParameterType, value: number) => {
@@ -212,102 +250,119 @@ function App() {
     }
   };
 
-  return (
-    <div className="relative w-full h-screen bg-stone-950 text-stone-100 flex flex-col md:flex-row overflow-hidden selection:bg-orange-500/30">
-      <Visualizer turbulence={state.turbulence} viscosity={state.viscosity} pressure={state.pressure} />
+  const handleGearTrigger = (radius: number) => {
+    const baseFreq = 110;
+    const multiplier = 100 / radius; 
+    const freq = baseFreq * multiplier;
+    synthManager.playNote(freq);
+  };
 
-      {/* Settings Modal */}
+  return (
+    <div className={`relative w-full h-screen flex flex-col md:flex-row overflow-hidden transition-colors duration-500 pt-12 ${theme.bg} ${theme.text}`}>
+      
       {isSettingsOpen && (
-        <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6">
+        <div className="fixed inset-0 z-[200] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6 text-stone-100">
           <div className="bg-stone-900 border border-stone-700 p-6 w-full max-w-md rounded-lg shadow-2xl">
             <h3 className="text-lg font-bold text-orange-500 mb-4">Configuración de Gemini</h3>
-            <p className="text-xs text-stone-400 mb-4">
-              Introduce a túa API Key de Google Gemini para habilitar a xeración de parches por IA.
-              A clave gárdase localmente no teu dispositivo.
-            </p>
+            <p className="text-xs text-stone-400 mb-4">Introduce a túa API Key.</p>
             <input 
               type="password" 
-              placeholder="Pega a túa API Key aquí..."
-              className="w-full bg-black/50 border border-stone-600 p-3 text-sm text-white mb-4 focus:border-orange-500 outline-none"
+              placeholder="API Key..."
+              className="w-full bg-black/50 border border-stone-600 p-3 text-sm mb-4 focus:border-orange-500 outline-none"
               defaultValue={apiKey}
-              onChange={(e) => setApiKey(e.target.value)} // Update local state immediately for input
+              onChange={(e) => setApiKey(e.target.value)}
             />
             <div className="flex justify-end gap-2">
-              <button 
-                onClick={() => setIsSettingsOpen(false)}
-                className="px-4 py-2 text-stone-400 hover:text-white text-sm"
-              >
-                Cancelar
-              </button>
-              <button 
-                onClick={() => saveApiKey(apiKey)} // Save current input value
-                className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white text-sm font-bold rounded"
-              >
-                Gardar
-              </button>
+              <button onClick={() => setIsSettingsOpen(false)} className="px-4 py-2 text-stone-400">Cancelar</button>
+              <button onClick={() => saveApiKey(apiKey)} className="px-4 py-2 bg-orange-600 rounded">Gardar</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Desktop Sidebar */}
-      <aside className="hidden md:flex w-80 h-full bg-stone-900/40 backdrop-blur-xl border-r border-stone-800/50 p-8 z-30">
-        <ControlsContent 
-           state={state}
-           handleStart={handleStart}
-           updateParam={updateParam}
-           aiPrompt={aiPrompt}
-           setAiPrompt={setAiPrompt}
-           generateAIPatch={generateAIPatch}
-           isAiLoading={isAiLoading}
-           titanReport={titanReport}
-           onOpenSettings={() => setIsSettingsOpen(true)}
-           hasApiKey={!!apiKey}
+      <div className="absolute top-0 left-0 w-full z-[100] flex justify-center pt-3 pointer-events-none">
+        <div className="flex gap-1 bg-black/40 backdrop-blur-xl p-1 rounded-full border border-white/10 pointer-events-auto shadow-xl">
+          <button 
+            onClick={() => handleEngineChange('criosfera')}
+            className={`px-4 py-1 rounded-full text-[10px] uppercase tracking-widest transition-all ${
+              currentEngine === 'criosfera' ? 'bg-stone-800 text-orange-400 shadow-sm' : 'opacity-50 hover:opacity-100'
+            }`}
+          >
+            Criosfera
+          </button>
+          <button 
+            onClick={() => handleEngineChange('gearheart')}
+            className={`px-4 py-1 rounded-full text-[10px] uppercase tracking-widest transition-all ${
+              currentEngine === 'gearheart' ? 'bg-[#3a2e26] text-[#ffbf69] shadow-sm' : 'opacity-50 hover:opacity-100'
+            }`}
+          >
+            Gearheart
+          </button>
+        </div>
+      </div>
+
+      <aside className={`hidden md:flex w-80 h-full bg-black/20 backdrop-blur-xl border-r ${theme.border} p-8 z-30`}>
+        <ControlsPanel 
+          currentEngine={currentEngine}
+          theme={theme}
+          state={state}
+          handleStart={handleStart}
+          updateParam={updateParam}
+          labels={labels}
+          aiPrompt={aiPrompt}
+          setAiPrompt={setAiPrompt}
+          apiKey={apiKey}
+          generateAIPatch={generateAIPatch}
+          isAiLoading={isAiLoading}
+          titanReport={titanReport}
+          setIsSettingsOpen={setIsSettingsOpen}
         />
       </aside>
 
-      {/* Mobile Menu Overlay */}
       {isMobileMenuOpen && (
-        <div className="md:hidden fixed inset-0 z-50 bg-stone-950/90 backdrop-blur-2xl p-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
+        <div className={`md:hidden fixed inset-0 z-50 ${theme.bg} p-8 pt-20 animate-in fade-in slide-in-from-bottom-4 duration-300`}>
           <button 
             onClick={() => setIsMobileMenuOpen(false)}
-            className="absolute top-6 right-6 p-2 text-stone-400 hover:text-white text-xl"
+            className="absolute top-6 right-6 p-2 text-xl opacity-50"
           >
             ✕
           </button>
-          <ControlsContent 
-             state={state}
-             handleStart={handleStart}
-             updateParam={updateParam}
-             aiPrompt={aiPrompt}
-             setAiPrompt={setAiPrompt}
-             generateAIPatch={generateAIPatch}
-             isAiLoading={isAiLoading}
-             titanReport={titanReport}
-             onOpenSettings={() => setIsSettingsOpen(true)}
-             hasApiKey={!!apiKey}
-          />
+          <ControlsContentWrapper>
+             <ControlsPanel 
+                currentEngine={currentEngine}
+                theme={theme}
+                state={state}
+                handleStart={handleStart}
+                updateParam={updateParam}
+                labels={labels}
+                aiPrompt={aiPrompt}
+                setAiPrompt={setAiPrompt}
+                apiKey={apiKey}
+                generateAIPatch={generateAIPatch}
+                isAiLoading={isAiLoading}
+                titanReport={titanReport}
+                setIsSettingsOpen={setIsSettingsOpen}
+            />
+          </ControlsContentWrapper>
         </div>
       )}
 
-      {/* Main UI Stage */}
       <div className="relative z-10 flex flex-col flex-1 h-full w-full">
         
-        {/* Mobile Header / Status */}
-        <div className="md:hidden flex justify-between items-center p-6 w-full">
-          <div>
-            <h1 className="text-xl font-bold tracking-tighter text-orange-500">CRIOSFERA</h1>
+        <div className="md:hidden absolute top-0 left-0 w-full flex justify-between items-center p-6 pt-16 z-40 pointer-events-none">
+          <div className="pointer-events-auto">
+            <h1 className={`text-xl font-bold tracking-tighter ${theme.accent} uppercase`}>{currentEngine}</h1>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 pointer-events-auto">
             <button 
               onClick={() => setIsSettingsOpen(true)}
-              className="p-3 bg-stone-900/60 border border-stone-800 rounded-full text-stone-400 active:scale-95 transition-transform"
+              className={`p-3 bg-black/40 border ${theme.border} rounded-full opacity-70 active:scale-95 transition-transform`}
             >
               ⚙️
             </button>
             <button 
               onClick={() => setIsMobileMenuOpen(true)}
-              className="p-3 bg-stone-900/60 border border-stone-800 rounded-full text-orange-400 active:scale-95 transition-transform"
+              className={`p-3 bg-black/40 border ${theme.border} rounded-full ${theme.accent} active:scale-95 transition-transform`}
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" />
@@ -316,88 +371,72 @@ function App() {
           </div>
         </div>
 
-        <main className="flex-1 flex flex-col justify-center md:justify-end p-6 md:p-12 items-center">
-          <div className="mb-auto md:mb-12 text-center pointer-events-none select-none mt-4 md:mt-0 w-full flex flex-col items-center">
-            <div className="text-4xl md:text-[120px] font-bold text-orange-500/10 leading-none mb-4 md:mb-8">TITAN</div>
-            
-            {/* XY Pad Area */}
-            <div className="w-full max-w-sm mb-4 pointer-events-auto z-20">
-              <div className="flex justify-between mb-2 px-2">
-                <select 
-                  value={xyParams.y} 
-                  onChange={(e) => setXyParams(prev => ({ ...prev, y: e.target.value as ParameterType }))}
-                  className="bg-stone-900/80 border border-stone-800 text-[10px] text-orange-400 uppercase tracking-widest p-1 rounded focus:outline-none focus:border-orange-500/50"
-                >
-                  {Object.values(ParameterType).map(p => <option key={p} value={p}>{PARAM_LABELS[p]}</option>)}
-                </select>
-                <select 
-                  value={xyParams.x} 
-                  onChange={(e) => setXyParams(prev => ({ ...prev, x: e.target.value as ParameterType }))}
-                  className="bg-stone-900/80 border border-stone-800 text-[10px] text-orange-400 uppercase tracking-widest p-1 rounded focus:outline-none focus:border-orange-500/50"
-                >
-                  {Object.values(ParameterType).map(p => <option key={p} value={p}>{PARAM_LABELS[p]}</option>)}
-                </select>
-              </div>
-              <BubbleXYPad 
-                xValue={state[xyParams.x]}
-                yValue={state[xyParams.y]}
-                xLabel={PARAM_LABELS[xyParams.x]}
-                yLabel={PARAM_LABELS[xyParams.y]}
-                onChange={(x, y) => setState(prev => ({ ...prev, [xyParams.x]: x, [xyParams.y]: y }))}
-              />
-            </div>
-
-            {/* Repositioned HUD (Data Display) */}
-            <div className="flex flex-col items-end text-[8px] md:text-[10px] text-stone-500 mono space-y-1 mb-8 w-full max-w-sm px-4">
-              <div className="flex justify-between w-full">
-                <div className="bg-black/20 p-1 rounded">DENSIDADE_GNL: {(state.viscosity * 100).toFixed(2)} KG/M3</div>
-                <div className="bg-black/20 p-1 rounded">LONXITUDE_TUBAXE: {(state.resonance * 40).toFixed(1)}M</div>
-              </div>
-              <div className="w-full h-0.5 md:h-1 bg-stone-800 overflow-hidden mt-1">
-                <div className="h-full bg-orange-500 transition-all duration-300" style={{ width: `${state.pressure * 100}%` }} />
-              </div>
-            </div>
-
-            <div className="text-orange-400/30 mono text-[8px] md:text-sm uppercase tracking-[0.5em] md:tracking-[1em] -mt-1 md:-mt-4 hidden md:block">
-              Simulación de Resonancia Física
-            </div>
-          </div>
-
-          {/* Keybed */}
-          <div className="w-full max-w-5xl grid grid-cols-7 gap-2 md:gap-4">
-            {NOTES.map((note) => {
-              const isActive = playingFrequencies.has(note.freq);
-              return (
-                <button
-                  key={note.label}
-                  onClick={() => toggleNote(note.freq)}
-                  className={`h-24 md:h-32 border transition-all flex flex-col items-center justify-end pb-2 md:pb-4 rounded-sm group relative overflow-hidden active:scale-[0.98] ${
-                    isActive 
-                      ? 'bg-orange-500/40 border-orange-400 shadow-[0_0_15px_rgba(249,115,22,0.2)]' 
-                      : 'bg-stone-900/60 border-stone-800/40'
-                  }`}
-                >
-                  <div className={`absolute top-0 left-0 w-full h-1 ${isActive ? 'bg-orange-400' : 'bg-stone-800'}`} />
-                  <span className={`mono text-[8px] md:text-xs mb-1 md:mb-2 ${isActive ? 'text-orange-200' : 'text-stone-500'}`}>
-                    {note.freq.toFixed(1)}Hz
-                  </span>
-                  <span className={`text-sm md:text-xl font-bold tracking-widest ${isActive ? 'text-white' : 'text-orange-200/80'}`}>
-                    {note.label}
-                  </span>
-                  {isActive && (
-                    <div className="absolute top-2 right-2 w-1.5 h-1.5 bg-orange-400 rounded-full animate-pulse" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-          <div className="hidden md:block mt-6 text-[10px] text-stone-600 uppercase tracking-widest mono">
-            Alterna as notas para sustain | Axusta parámetros para modulación espectral
-          </div>
+        <main className="flex-1 flex flex-col justify-center md:justify-end p-6 md:p-12 items-center relative w-full h-full">
+            {currentEngine === 'criosfera' ? (
+                <>
+                    <div className="absolute inset-0 pointer-events-none">
+                        <Visualizer turbulence={state.turbulence} viscosity={state.viscosity} pressure={state.pressure} />
+                    </div>
+                    <div className="mt-auto w-full max-w-md flex flex-col items-center z-10">
+                        <div className="w-full mb-4">
+                            <div className="flex justify-between mb-2 px-2">
+                                <select 
+                                    value={xyParams.y} 
+                                    onChange={(e) => setXyParams(prev => ({ ...prev, y: e.target.value as ParameterType }))}
+                                    className={`bg-black/60 border ${theme.border} text-[10px] ${theme.accent} uppercase tracking-widest p-1 rounded`}
+                                >
+                                    {Object.values(ParameterType).map(p => <option key={p} value={p}>{labels[p]}</option>)}
+                                </select>
+                                <select 
+                                    value={xyParams.x} 
+                                    onChange={(e) => setXyParams(prev => ({ ...prev, x: e.target.value as ParameterType }))}
+                                    className={`bg-black/60 border ${theme.border} text-[10px] ${theme.accent} uppercase tracking-widest p-1 rounded`}
+                                >
+                                    {Object.values(ParameterType).map(p => <option key={p} value={p}>{labels[p]}</option>)}
+                                </select>
+                            </div>
+                            <BubbleXYPad 
+                                xValue={state[xyParams.x]}
+                                yValue={state[xyParams.y]}
+                                xLabel={labels[xyParams.x]}
+                                yLabel={labels[xyParams.y]}
+                                onChange={(x, y) => setState(prev => ({ ...prev, [xyParams.x]: x, [xyParams.y]: y }))}
+                            />
+                        </div>
+                        <div className="w-full grid grid-cols-7 gap-2">
+                            {NOTES.map((note) => {
+                                const isActive = playingFrequencies.has(note.freq);
+                                return (
+                                    <button
+                                    key={note.label}
+                                    onClick={() => toggleNote(note.freq)}
+                                    className={`h-24 border transition-all flex flex-col items-center justify-end pb-2 rounded-sm active:scale-[0.98] ${
+                                        isActive 
+                                        ? `bg-orange-500/40 border-orange-400 shadow-[0_0_15px_rgba(249,115,22,0.2)]` 
+                                        : `bg-black/40 border-white/10`
+                                    }`}
+                                    >
+                                    <span className={`text-xl font-bold ${isActive ? 'text-white' : 'opacity-50'}`}>{note.label}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </>
+            ) : (
+                <div className="w-full h-full relative">
+                    <GearSequencer onTrigger={handleGearTrigger} />
+                </div>
+            )}
         </main>
       </div>
     </div>
   );
 }
+
+// Wrapper simple para o menú móbil
+const ControlsContentWrapper = ({ children }: { children: React.ReactNode }) => (
+    <div className="h-full w-full">{children}</div>
+);
 
 export default App;

@@ -1,8 +1,7 @@
-
 import { SynthState } from '../types';
 
 export interface ISynthEngine {
-  init(): Promise<void>;
+  init(ctx: AudioContext): void; // Agora recibe o contexto
   updateParameters(state: SynthState): void;
   playNote(frequency: number, velocity?: number): number | undefined;
   stopNote(id: number): void;
