@@ -4,6 +4,7 @@ import { audioEngine } from './services/AudioEngine';
 import { fetchTitanCondition } from './services/GeminiService';
 import Visualizer from './components/Visualizer';
 import ControlSlider from './components/ControlSlider';
+import BubbleXYPad from './components/BubbleXYPad';
 
 const NOTES = [
   { label: 'C2', freq: 65.41 },
@@ -100,6 +101,11 @@ function App() {
   const [titanReport, setTitanReport] = useState<string>('Sustain mode active: toggle keys to start the atmosphere.');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
+  const [xyParams, setXyParams] = useState({
+    x: ParameterType.RESONANCE,
+    y: ParameterType.PRESSURE
+  });
+
   const [playingFrequencies, setPlayingFrequencies] = useState<Map<number, number>>(new Map());
   const activeNotesRef = useRef<Map<number, number>>(new Map());
 
@@ -228,9 +234,37 @@ function App() {
         </div>
 
         <main className="flex-1 flex flex-col justify-center md:justify-end p-6 md:p-12 items-center">
-          <div className="mb-auto md:mb-24 text-center pointer-events-none select-none mt-12 md:mt-0">
-            <div className="text-6xl md:text-[120px] font-bold text-orange-500/10 leading-none">TITAN</div>
-            <div className="text-orange-400/30 mono text-[8px] md:text-sm uppercase tracking-[0.5em] md:tracking-[1em] -mt-1 md:-mt-4">
+          <div className="mb-auto md:mb-12 text-center pointer-events-none select-none mt-4 md:mt-0 w-full flex flex-col items-center">
+            <div className="text-4xl md:text-[120px] font-bold text-orange-500/10 leading-none mb-4 md:mb-8">TITAN</div>
+            
+            {/* XY Pad Area */}
+            <div className="w-full max-w-sm mb-8 pointer-events-auto z-20">
+              <div className="flex justify-between mb-2 px-2">
+                <select 
+                  value={xyParams.y} 
+                  onChange={(e) => setXyParams(prev => ({ ...prev, y: e.target.value as ParameterType }))}
+                  className="bg-stone-900/80 border border-stone-800 text-[10px] text-orange-400 uppercase tracking-widest p-1 rounded focus:outline-none focus:border-orange-500/50"
+                >
+                  {Object.values(ParameterType).map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+                <select 
+                  value={xyParams.x} 
+                  onChange={(e) => setXyParams(prev => ({ ...prev, x: e.target.value as ParameterType }))}
+                  className="bg-stone-900/80 border border-stone-800 text-[10px] text-orange-400 uppercase tracking-widest p-1 rounded focus:outline-none focus:border-orange-500/50"
+                >
+                  {Object.values(ParameterType).map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+              <BubbleXYPad 
+                xValue={state[xyParams.x]}
+                yValue={state[xyParams.y]}
+                xLabel={xyParams.x}
+                yLabel={xyParams.y}
+                onChange={(x, y) => setState(prev => ({ ...prev, [xyParams.x]: x, [xyParams.y]: y }))}
+              />
+            </div>
+
+            <div className="text-orange-400/30 mono text-[8px] md:text-sm uppercase tracking-[0.5em] md:tracking-[1em] -mt-1 md:-mt-4 hidden md:block">
               Physical Resonance Simulation
             </div>
           </div>
