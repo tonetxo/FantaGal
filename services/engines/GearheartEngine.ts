@@ -2,6 +2,19 @@
 import { SynthState } from '../../types';
 import { ISynthEngine } from '../BaseSynthEngine';
 
+export interface Gear {
+  id: number;
+  x: number;
+  y: number;
+  radius: number;
+  teeth: number;
+  angle: number;
+  speed: number;
+  isDragging: boolean;
+  isConnected: boolean;
+  material: 'bronze' | 'copper' | 'gold' | 'platinum' | 'iron';
+}
+
 export class GearheartEngine implements ISynthEngine {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
@@ -15,19 +28,27 @@ export class GearheartEngine implements ISynthEngine {
   private percussionFilter: BiquadFilterNode | null = null;
   private distortion: WaveShaperNode | null = null;
 
-  // Sequencer state
-  private isPlaying: boolean = false;
-  private currentStep: number = 0;
-  private nextStepTime: number = 0;
-  private lookahead: number = 25.0; // ms
-  private scheduleAheadTime: number = 0.1; // s
-  private timerID: number | null = null;
+  // Physics & Sequencer State
+  private gears: Gear[] = [];
+  private particles: any[] = []; // Visuals can stay in UI, but if we wanted sound from particles... no, lets keep physics pure.
+  // Actually, we need to expose gears to UI.
+  private animationFrameId: number | null = null;
+  private lastTime: number = 0;
+  
+  // State from React (mirrored here for physics)
+  private speedMultiplier: number = 1;
+  private turbulence: number = 0.5;
+  public vibration: number = 0; // Exposed for UI
+  
+  // Motor State
+  public isMotorActive: boolean = true;
 
-  private bpm: number = 90;
-  private complexity: number = 0.5;
-  private percussionResonance: number = 0.5;
-  private percussionPressure: number = 0.5;
-  private diffusion: number = 0.5; 
+  constructor() {
+     this.initGears(); // Default setup
+     this.startPhysicsLoop();
+  }
+
+  // --- Audio Setup (Existing) ---
 
   async init(ctx: AudioContext) {
     this.ctx = ctx;
@@ -57,15 +78,11 @@ export class GearheartEngine implements ISynthEngine {
     this.distortion.curve = this.makeDistortionCurve(0.05); 
 
     // Routing
-    // Signal Flow: Osc -> Gain -> Distortion -> Filter -> (Dry + Reverb) -> Compressor -> Out
     this.masterGain.connect(this.distortion);
     this.distortion.connect(this.percussionFilter);
     
-    // Dry path
-    this.percussionFilter.connect(this.compressor);
-    
-    // Wet path (Reverb)
-    this.percussionFilter.connect(this.reverb);
+    this.percussionFilter.connect(this.compressor); // Dry
+    this.percussionFilter.connect(this.reverb);     // Wet Send
     this.reverb.connect(this.reverbGain);
     this.reverbGain.connect(this.compressor);
 
@@ -75,13 +92,12 @@ export class GearheartEngine implements ISynthEngine {
   private buildImpulse(): AudioBuffer | null {
     if (!this.ctx) return null;
     const rate = this.ctx.sampleRate;
-    const length = rate * 2.0; // 2 seconds tail
+    const length = rate * 2.0; 
     const impulse = this.ctx.createBuffer(2, length, rate);
     
     for (let channel = 0; channel < 2; channel++) {
         const data = impulse.getChannelData(channel);
         for (let i = 0; i < length; i++) {
-            // Exponential decay for room sound
             const decay = Math.pow(1 - i / length, 4); 
             data[i] = (Math.random() * 2 - 1) * decay;
         }
@@ -100,80 +116,250 @@ export class GearheartEngine implements ISynthEngine {
     return curve;
   }
 
+  // --- Physics Engine ---
+
+  private initGears() {
+      // Default initial gears
+      const width = typeof window !== 'undefined' ? window.innerWidth : 800;
+      const height = typeof window !== 'undefined' ? window.innerHeight * 0.6 : 600;
+      const centerX = width / 2;
+      
+      this.gears = [
+        { id: 0, x: 150, y: 300, radius: 60, teeth: 12, angle: 0, speed: 0.02, isDragging: false, isConnected: true, material: 'iron' }, // Motor
+        { id: 1, x: 300, y: 200, radius: 40, teeth: 8, angle: 0, speed: 0, isDragging: false, isConnected: false, material: 'bronze' },
+        { id: 2, x: 100, y: 150, radius: 30, teeth: 6, angle: 0, speed: 0, isDragging: false, isConnected: false, material: 'copper' },
+        { id: 3, x: 250, y: 400, radius: 50, teeth: 10, angle: 0, speed: 0, isDragging: false, isConnected: false, material: 'gold' },
+        { id: 4, x: 200, y: 100, radius: 25, teeth: 5, angle: 0, speed: 0, isDragging: false, isConnected: false, material: 'platinum' },
+      ];
+  }
+
+  public setGearConfig(gearConfig: { numGears: number; arrangement: string } | null) {
+      if (!gearConfig) return;
+
+      const newGears: Gear[] = [];
+      const width = window.innerWidth;
+      const height = window.innerHeight * 0.6;
+      const centerX = width / 2;
+      const centerY = height / 2;
+
+      // Always add Motor first
+      newGears.push({ 
+          id: 0, 
+          x: centerX, 
+          y: height - 100, 
+          radius: 60, 
+          teeth: 12, 
+          angle: 0, 
+          speed: 0.02, 
+          isDragging: false, 
+          isConnected: true, 
+          material: 'iron' 
+      });
+
+      const count = Math.max(3, Math.min(8, gearConfig.numGears));
+      const materials: ('bronze' | 'copper' | 'gold' | 'platinum')[] = ['bronze', 'copper', 'gold', 'platinum'];
+
+      for (let i = 1; i < count; i++) {
+          let x, y, r;
+          
+          if (gearConfig.arrangement === 'linear') {
+              x = (width / (count + 1)) * (i + 1);
+              y = centerY;
+              r = 30 + Math.random() * 20;
+          } else if (gearConfig.arrangement === 'cluster') {
+              const angle = (Math.PI * 2 * i) / count;
+              x = centerX + Math.cos(angle) * 100;
+              y = centerY + Math.sin(angle) * 100;
+              r = 25 + Math.random() * 25;
+          } else { // chaotic
+              x = Math.random() * (width - 100) + 50;
+              y = Math.random() * (height - 100) + 50;
+              r = 20 + Math.random() * 40;
+          }
+
+          newGears.push({
+              id: i,
+              x: x,
+              y: y,
+              radius: r,
+              teeth: Math.floor(r / 5),
+              angle: 0,
+              speed: 0,
+              isDragging: false,
+              isConnected: false,
+              material: materials[i % materials.length]
+          });
+      }
+      this.gears = newGears;
+  }
+
+  public getGears(): Gear[] {
+      return this.gears;
+  }
+
+  public updateGearPosition(id: number, x: number, y: number) {
+      const gear = this.gears.find(g => g.id === id);
+      if (gear) {
+          gear.x = x;
+          gear.y = y;
+          gear.isDragging = true; // Mark as dragging so physics knows
+      }
+  }
+
+  public endDrag(id: number) {
+      const gear = this.gears.find(g => g.id === id);
+      if (gear) {
+          gear.isDragging = false;
+      }
+  }
+
+  public toggleMotor() {
+      this.isMotorActive = !this.isMotorActive;
+      this.gears[0].isConnected = this.isMotorActive;
+  }
+
+  private startPhysicsLoop() {
+      const loop = () => {
+          this.updatePhysics();
+          this.animationFrameId = requestAnimationFrame(loop);
+      };
+      this.animationFrameId = requestAnimationFrame(loop);
+  }
+
+  private updatePhysics() {
+      // Decay vibration for UI read
+      if (this.vibration > 0) this.vibration *= 0.9;
+
+      const gears = this.gears;
+      if (gears.length === 0) return;
+
+      // Update Motor
+      gears[0].isConnected = this.isMotorActive;
+      gears[0].speed = this.isMotorActive ? 0.02 * this.speedMultiplier : 0;
+
+      // Reset non-motors/non-connected
+      for (let i = 1; i < gears.length; i++) {
+        if (gears[i].isDragging) {
+            gears[i].isConnected = false;
+            gears[i].speed = 0;
+        } else {
+            gears[i].isConnected = false;
+            gears[i].speed = 0;
+        }
+      }
+
+      // Energy Propagation (Iterative Flood Fill)
+      let changed = true;
+      let iterations = 0;
+      while(changed && iterations < 10) {
+        changed = false;
+        iterations++;
+
+        for (let i = 0; i < gears.length; i++) {
+            if (!gears[i].isConnected) continue;
+
+            for (let j = 0; j < gears.length; j++) {
+                if (i === j) continue;
+                if (gears[j].isDragging) continue;
+                if (gears[j].isConnected) continue;
+
+                const dx = gears[i].x - gears[j].x;
+                const dy = gears[i].y - gears[j].y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                const combinedRadius = gears[i].radius + gears[j].radius;
+                const margin = 12;
+
+                if (dist < combinedRadius + margin) {
+                    gears[j].isConnected = true;
+                    gears[j].speed = -gears[i].speed * (gears[i].radius / gears[j].radius);
+                    changed = true;
+                }
+            }
+        }
+      }
+
+      // Update Angles and Trigger Sound
+      gears.forEach(g => {
+        if (g.isConnected) {
+            const prevAngle = g.angle;
+            g.angle += g.speed;
+
+            const normPrev = Math.abs(prevAngle % (Math.PI * 2));
+            const normCurr = Math.abs(g.angle % (Math.PI * 2));
+
+            // Check for full rotation (trigger)
+            if (normCurr < normPrev && Math.abs(normCurr - normPrev) > 0.1) {
+                // INTERNAL AUDIO TRIGGER
+                this.internalTrigger(g.radius, g.id);
+            }
+        }
+      });
+  }
+
+  private internalTrigger(radius: number, id: number) {
+      // Play sound
+      this.playNote(radius);
+      
+      // Update internal vibration state for UI
+      this.vibration += (id === 0 ? 10 : 3);
+      if (this.vibration > 15) this.vibration = 15;
+  }
+
+  // --- Parameter Updates ---
+
   updateParameters(state: SynthState) {
     if (!this.ctx || !this.masterGain || !this.percussionFilter) return;
 
-    this.percussionPressure = state.pressure;
-    this.percussionResonance = state.resonance;
-    // Viscosity is handled by the UI sequencer now, but we keep mapped for consistency if needed later
-    this.bpm = 60 + (state.viscosity * 120);
-    this.complexity = state.turbulence;
-    this.diffusion = state.diffusion;
-
-    const t = this.ctx.currentTime;
-    this.percussionFilter.Q.setTargetAtTime(1 + (this.percussionResonance * 10), t, 0.1); 
-    this.masterGain.gain.setTargetAtTime(0.15 + (this.percussionPressure * 0.25), t, 0.1); 
+    // Map SynthState to Engine Params
+    this.speedMultiplier = 0.5 + (state.viscosity * 1.5); // Viscosity controls Global Speed
+    this.turbulence = state.turbulence;
     
-    // Diffusion controls reverb mix (Dry/Wet)
+    // Existing Audio Params
+    const t = this.ctx.currentTime;
+    this.percussionFilter.Q.setTargetAtTime(1 + (state.resonance * 10), t, 0.1); 
+    this.masterGain.gain.setTargetAtTime(0.15 + (state.pressure * 0.25), t, 0.1); 
     if (this.reverbGain) {
-        // Max reverb gain 1.0
-        this.reverbGain.gain.setTargetAtTime(this.diffusion * 1.5, t, 0.1);
+        this.reverbGain.gain.setTargetAtTime(state.diffusion * 1.5, t, 0.1);
     }
   }
 
-  // O "playNote" en Gearheart agora reproduce sons de percusión
-  // O parámetro 'frequency' interprétase agora como 'radio' do engranaxe
+  // --- Audio Methods ---
+
   playNote(radius: number, velocity?: number): number | undefined {
     if (!this.ctx || !this.masterGain) return;
     this.resume();
 
-    // Determinar se é o motor (bombo) ou outro engranaxe (timbal)
-    // O motor ten radio 60. As outras teñen radios menores (25, 30, 40, 50).
     const isMotor = radius >= 58; 
 
     if (isMotor) {
       this.playKickDrum();
     } else {
-      // Mapear o radio a un tamaño de timbal para determinar a frecuencia
       const drumFrequency = this.mapRadiusToDrumFrequency(radius);
       this.playTomDrum(drumFrequency);
     }
 
-    return 1; // ID ficticio
+    return 1;
   }
 
   private mapRadiusToDrumFrequency(radius: number): number {
-    // Mapear radios de 25-60 a frecuencias de 60Hz-150Hz (máis graves)
-    // Radio maior = frecuencia menor (timbal máis grave)
     const minRadius = 25;
     const maxRadius = 60;
-    const minFreq = 60; // Lowered from 80
-    const maxFreq = 150; // Lowered from 200
-
-    // Normalizar o radio
+    const minFreq = 60;
+    const maxFreq = 150;
     const normalized = (radius - minRadius) / (maxRadius - minRadius);
-    // Inverter para que radio maior sexa frecuencia menor
     const freq = maxFreq - (normalized * (maxFreq - minFreq));
-
     return freq;
   }
 
   private playKickDrum() {
     if (!this.ctx || !this.masterGain) return;
-
     const now = this.ctx.currentTime;
+    const decay = 0.3 + (this.turbulence * 0.4); 
     
-    // Parameters influenced by complexity and diffusion
-    const decay = 0.3 + (this.complexity * 0.4); // Complexity increases sustain/decay
-    const pitchDropSpeed = 0.1 + (this.diffusion * 0.2); // Diffusion affects how fast pitch drops (slower drop = more "boom")
-
-    // Criar un bombo con unha caída de frecuencia (pitch bend)
     const osc = this.ctx.createOscillator();
     osc.type = 'sine';
-
-    // Configurar a caída de frecuencia para simular un bombo
-    osc.frequency.setValueAtTime(100, now); // Lowered from 150 for less click
-    osc.frequency.exponentialRampToValueAtTime(30, now + pitchDropSpeed); // Lowered from 40 for deeper thud
+    osc.frequency.setValueAtTime(100, now);
+    osc.frequency.exponentialRampToValueAtTime(30, now + 0.1);
 
     const env = this.ctx.createGain();
     env.gain.setValueAtTime(0.8, now);
@@ -188,18 +374,13 @@ export class GearheartEngine implements ISynthEngine {
 
   private playTomDrum(frequency: number) {
     if (!this.ctx || !this.masterGain) return;
-
     const now = this.ctx.currentTime;
-
-    const decay = 0.2 + (this.complexity * 0.3);
-    // Diffusion adds a slight pitch bend to toms too
-    const pitchBend = this.diffusion * 20;
-
-    // Criar un timbal con frecuencia específica
+    const decay = 0.2 + (this.turbulence * 0.3);
+    
     const osc = this.ctx.createOscillator();
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(frequency + pitchBend, now);
-    osc.frequency.exponentialRampToValueAtTime(frequency, now + 0.1);
+    osc.frequency.setValueAtTime(frequency, now);
+    osc.frequency.exponentialRampToValueAtTime(frequency * 0.8, now + 0.1);
 
     const env = this.ctx.createGain();
     env.gain.setValueAtTime(0.6, now);
@@ -213,7 +394,7 @@ export class GearheartEngine implements ISynthEngine {
   }
 
   stopNote() {
-    // Non facemos nada, xa que os sons son por eventos, non por notas sustentadas
+    // Percussion doesn't need stop
   }
 
   async resume() {

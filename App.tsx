@@ -99,7 +99,7 @@ const ControlsPanel = ({
 
       <div className={`pt-6 border-t ${theme.border} mt-auto`}>
         <div className="text-[10px] uppercase tracking-widest opacity-50 mb-4 font-bold">
-            {currentEngine === 'criosfera' ? 'Enlace de Parche IA' : 'Xerador de Maquinaria (IA)'}
+            {currentEngine === 'criosfera' ? 'Xerador de atmósferas' : 'Xerador de Maquinaria (IA)'}
         </div>
         <div className="relative">
           <input 

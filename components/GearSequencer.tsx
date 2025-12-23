@@ -1,18 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { synthManager } from '../services/SynthManager';
-
-interface Gear {
-  id: number;
-  x: number;
-  y: number;
-  radius: number;
-  teeth: number;
-  angle: number;
-  speed: number;
-  isDragging: boolean;
-  isConnected: boolean; // Se está tocando a outra que xira
-  material: 'bronze' | 'copper' | 'gold' | 'platinum' | 'iron';
-}
+import { Gear } from '../services/engines/GearheartEngine';
 
 interface Particle {
     x: number;
@@ -27,107 +15,26 @@ interface Particle {
 }
 
 interface GearSequencerProps {
-    onTrigger: (pitch: number) => void;
-    speedMultiplier?: number;
+    onTrigger?: (pitch: number) => void; 
+    speedMultiplier?: number; 
     diffusion?: number;
     turbulence?: number;
     gearConfig?: { numGears: number; arrangement: string } | null;
 }
 
-const GearSequencer = ({ onTrigger, speedMultiplier = 1, diffusion = 0.5, turbulence = 0.5, gearConfig }: GearSequencerProps) => {
+const GearSequencer = ({ gearConfig, diffusion = 0.5 }: GearSequencerProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  
-  // Use refs for state that changes every frame (physics) to avoid React renders
-  const gearsRef = useRef<Gear[]>([
-    { id: 0, x: 150, y: 300, radius: 60, teeth: 12, angle: 0, speed: 0.02, isDragging: false, isConnected: true, material: 'iron' }, // Motor
-    { id: 1, x: 300, y: 200, radius: 40, teeth: 8, angle: 0, speed: 0, isDragging: false, isConnected: false, material: 'bronze' },
-    { id: 2, x: 100, y: 150, radius: 30, teeth: 6, angle: 0, speed: 0, isDragging: false, isConnected: false, material: 'copper' },
-    { id: 3, x: 250, y: 400, radius: 50, teeth: 10, angle: 0, speed: 0, isDragging: false, isConnected: false, material: 'gold' },
-    { id: 4, x: 200, y: 100, radius: 25, teeth: 5, angle: 0, speed: 0, isDragging: false, isConnected: false, material: 'platinum' },
-  ]);
-
   const particlesRef = useRef<Particle[]>([]);
-  const vibrationRef = useRef<number>(0);
-
-  // Keep props in refs
-  const speedMultRef = useRef(speedMultiplier);
-  const diffusionRef = useRef(diffusion);
-  const turbulenceRef = useRef(turbulence);
-
-  useEffect(() => {
-    speedMultRef.current = speedMultiplier;
-    diffusionRef.current = diffusion;
-    turbulenceRef.current = turbulence;
-  }, [speedMultiplier, diffusion, turbulence]);
-
-  // Procedural Generation based on AI Config
-  useEffect(() => {
-      if (!gearConfig) return;
-
-      const newGears: Gear[] = [];
-      const width = window.innerWidth;
-      const height = window.innerHeight * 0.6;
-      const centerX = width / 2;
-      const centerY = height / 2;
-
-      // Always add Motor first
-      newGears.push({ 
-          id: 0, 
-          x: centerX, 
-          y: height - 100, 
-          radius: 60, 
-          teeth: 12, 
-          angle: 0, 
-          speed: 0.02, 
-          isDragging: false, 
-          isConnected: true, 
-          material: 'iron' 
-      });
-
-      const count = Math.max(3, Math.min(8, gearConfig.numGears));
-      const materials: ('bronze' | 'copper' | 'gold' | 'platinum')[] = ['bronze', 'copper', 'gold', 'platinum'];
-
-      for (let i = 1; i < count; i++) {
-          let x, y, r;
-          
-          if (gearConfig.arrangement === 'linear') {
-              x = (width / (count + 1)) * (i + 1);
-              y = centerY;
-              r = 30 + Math.random() * 20;
-          } else if (gearConfig.arrangement === 'cluster') {
-              const angle = (Math.PI * 2 * i) / count;
-              x = centerX + Math.cos(angle) * 100;
-              y = centerY + Math.sin(angle) * 100;
-              r = 25 + Math.random() * 25;
-          } else { // chaotic
-              x = Math.random() * (width - 100) + 50;
-              y = Math.random() * (height - 100) + 50;
-              r = 20 + Math.random() * 40;
-          }
-
-          newGears.push({
-              id: i,
-              x: x,
-              y: y,
-              radius: r,
-              teeth: Math.floor(r / 5),
-              angle: 0,
-              speed: 0,
-              isDragging: false,
-              isConnected: false,
-              material: materials[i % materials.length]
-          });
-      }
-
-      gearsRef.current = newGears;
-
-  }, [gearConfig]);
-
   const requestRef = useRef<number>(0);
   const dragInfo = useRef<{ id: number, offsetX: number, offsetY: number } | null>(null);
-  const isMotorActive = useRef<boolean>(true); 
-  const motorTogglePending = useRef<boolean>(false);
-  const hasStartedAudio = useRef(false);
+
+  // Sync Config to Engine
+  useEffect(() => {
+      const engine = synthManager.getGearheartEngine();
+      if (engine && gearConfig) {
+          engine.setGearConfig(gearConfig);
+      }
+  }, [gearConfig]);
 
   const spawnSmoke = (x: number, y: number, amount: number) => {
     for (let i = 0; i < amount; i++) {
@@ -142,23 +49,9 @@ const GearSequencer = ({ onTrigger, speedMultiplier = 1, diffusion = 0.5, turbul
             maxLife: 1.0 + Math.random() * 0.5,
             size: Math.random() * 5 + 2,
             type: 'smoke',
-            color: `rgba(200, 200, 200, ${0.1 + diffusionRef.current * 0.2})`
+            color: `rgba(200, 200, 200, ${0.1 + (diffusion || 0.5) * 0.2})`
         });
     }
-  };
-
-  const spawnOil = (x: number, y: number) => {
-      particlesRef.current.push({
-          x: x,
-          y: y,
-          vx: (Math.random() - 0.5) * 2,
-          vy: Math.random() * 2 + 1, // Downwards
-          life: 1.0,
-          maxLife: 0.8,
-          size: Math.random() * 3 + 1,
-          type: 'oil',
-          color: '#000000'
-      });
   };
 
   const getGradientColors = (material: string): [string, string, string] => {
@@ -177,6 +70,9 @@ const GearSequencer = ({ onTrigger, speedMultiplier = 1, diffusion = 0.5, turbul
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+    
+    const engine = synthManager.getGearheartEngine();
+    if (!engine) return;
 
     // Background - Rusty Iron
     const bgGradient = ctx.createRadialGradient(
@@ -190,106 +86,45 @@ const GearSequencer = ({ onTrigger, speedMultiplier = 1, diffusion = 0.5, turbul
     ctx.fillStyle = bgGradient;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Vibration/Shake
-    if (vibrationRef.current > 0.1) {
-        const shakeX = (Math.random() - 0.5) * vibrationRef.current;
-        const shakeY = (Math.random() - 0.5) * vibrationRef.current;
+    // Vibration/Shake from Engine
+    const vibration = engine.vibration;
+    if (vibration > 0.1) {
+        const shakeX = (Math.random() - 0.5) * vibration;
+        const shakeY = (Math.random() - 0.5) * vibration;
         ctx.save();
         ctx.translate(shakeX, shakeY);
-        vibrationRef.current *= 0.9;
     } else {
         ctx.save();
     }
 
-    const gears = gearsRef.current; 
-
-    // Update Motor State
-    gears[0].isConnected = isMotorActive.current;
-    gears[0].speed = isMotorActive.current ? 0.02 * speedMultRef.current : 0;
-
-    // Reset non-motors
-    for (let i = 1; i < gears.length; i++) {
-        if (gears[i].isDragging) {
-            gears[i].isConnected = false;
-            gears[i].speed = 0;
-        } else {
-            gears[i].isConnected = false;
-            gears[i].speed = 0;
-        }
-    }
-
-    // Propagate Energy
-    let changed = true;
-    let iterations = 0;
-    while(changed && iterations < 10) {
-        changed = false;
-        iterations++;
-
-        for (let i = 0; i < gears.length; i++) {
-            if (!gears[i].isConnected) continue;
-
-            if (Math.abs(gears[i].speed) > 0.05 && Math.random() < 0.05 * turbulenceRef.current) {
-                const angle = Math.random() * Math.PI * 2;
-                spawnOil(
-                    gears[i].x + Math.cos(angle) * gears[i].radius, 
-                    gears[i].y + Math.sin(angle) * gears[i].radius
-                );
-            }
-
-            for (let j = 0; j < gears.length; j++) {
-                if (i === j) continue;
-                if (gears[j].isDragging) continue;
-                if (gears[j].isConnected) continue;
-
-                const dx = gears[i].x - gears[j].x;
-                const dy = gears[i].y - gears[j].y;
-                const dist = Math.sqrt(dx*dx + dy*dy);
-                const combinedRadius = gears[i].radius + gears[j].radius;
-                const margin = 12;
-
-                if (dist < combinedRadius + margin) {
-                    gears[j].isConnected = true;
-                    gears[j].speed = -gears[i].speed * (gears[i].radius / gears[j].radius);
-
-                    // Mechanical Link Visualization
-                    ctx.beginPath();
-                    ctx.moveTo(gears[i].x, gears[i].y);
-                    ctx.lineTo(gears[j].x, gears[j].y);
-                    ctx.strokeStyle = "rgba(100, 80, 50, 0.4)";
-                    ctx.lineWidth = 10;
-                    ctx.stroke();
-                    ctx.strokeStyle = "rgba(180, 140, 90, 0.2)";
-                    ctx.lineWidth = 4;
-                    ctx.stroke();
-
-                    changed = true;
-                }
-            }
-        }
-    }
+    const gears = engine.getGears();
 
     // Draw Gears
     gears.forEach(g => {
+        // Mechanical Link Visualization
         if (g.isConnected) {
-            const prevAngle = g.angle;
-            g.angle += g.speed;
-
-            const normPrev = Math.abs(prevAngle % (Math.PI * 2));
-            const normCurr = Math.abs(g.angle % (Math.PI * 2));
-
-            // Trigger
-            if (normCurr < normPrev && Math.abs(normCurr - normPrev) > 0.1) {
-                 if (hasStartedAudio.current) {
-                    onTrigger(g.radius);
-                    
-                    // Trigger shake
-                    vibrationRef.current += (g.id === 0 ? 10 : 3);
-                    if (vibrationRef.current > 15) vibrationRef.current = 15;
-
-                    const smokeAmount = 5 + Math.floor(diffusionRef.current * 10);
-                    spawnSmoke(g.x, g.y - g.radius, smokeAmount);
+            gears.forEach(other => {
+                 if (g.id !== other.id && other.isConnected && !g.isDragging && !other.isDragging) {
+                     const dx = g.x - other.x;
+                     const dy = g.y - other.y;
+                     const dist = Math.sqrt(dx*dx + dy*dy);
+                     if (dist < g.radius + other.radius + 12) {
+                        ctx.beginPath();
+                        ctx.moveTo(g.x, g.y);
+                        ctx.lineTo(other.x, other.y);
+                        ctx.strokeStyle = "rgba(100, 80, 50, 0.4)";
+                        ctx.lineWidth = 10;
+                        ctx.stroke();
+                        ctx.strokeStyle = "rgba(180, 140, 90, 0.2)";
+                        ctx.lineWidth = 4;
+                        ctx.stroke();
+                     }
                  }
-            }
+            });
+        }
+        
+        if (g.isConnected && Math.abs(g.speed) > 0.01 && Math.random() < 0.02) {
+             spawnSmoke(g.x, g.y - g.radius, 1);
         }
 
         ctx.save();
@@ -298,7 +133,7 @@ const GearSequencer = ({ onTrigger, speedMultiplier = 1, diffusion = 0.5, turbul
 
         // Halo for Motor
         if (g.id === 0) {
-            if (isMotorActive.current) {
+            if (engine.isMotorActive) {
                 ctx.shadowColor = "#ff2200";
                 ctx.shadowBlur = 40 + Math.random() * 10;
             } else {
@@ -432,10 +267,10 @@ const GearSequencer = ({ onTrigger, speedMultiplier = 1, diffusion = 0.5, turbul
   }, []); 
 
   const handleStart = (clientX: number, clientY: number) => {
-    if (!hasStartedAudio.current) {
-        synthManager.resume();
-        hasStartedAudio.current = true;
-    }
+    synthManager.resume();
+    
+    const engine = synthManager.getGearheartEngine();
+    if (!engine) return;
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -443,15 +278,18 @@ const GearSequencer = ({ onTrigger, speedMultiplier = 1, diffusion = 0.5, turbul
     const x = clientX - rect.left;
     const y = clientY - rect.top;
 
-    const gears = gearsRef.current;
+    const gears = engine.getGears();
     const motor = gears[0];
     const dxMotor = x - motor.x;
     const dyMotor = y - motor.y;
+    
+    // Check Motor Click
     if (Math.sqrt(dxMotor*dxMotor + dyMotor*dyMotor) < motor.radius) {
-        motorTogglePending.current = true;
+        engine.toggleMotor();
         return;
     }
 
+    // Check Drag
     const hitGears = [];
     for (let i = 0; i < gears.length; i++) {
         const g = gears[i];
@@ -471,7 +309,7 @@ const GearSequencer = ({ onTrigger, speedMultiplier = 1, diffusion = 0.5, turbul
         const dy = y - g.y;
 
         dragInfo.current = { id: g.id, offsetX: dx, offsetY: dy };
-        gears[selected.index].isDragging = true;
+        engine.updateGearPosition(g.id, g.x, g.y); 
     }
   };
 
@@ -479,37 +317,26 @@ const GearSequencer = ({ onTrigger, speedMultiplier = 1, diffusion = 0.5, turbul
     if (!dragInfo.current) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
+    
+    const engine = synthManager.getGearheartEngine();
+    if (!engine) return;
 
     const rect = canvas.getBoundingClientRect();
     const x = clientX - rect.left;
     const y = clientY - rect.top;
 
-    const gears = gearsRef.current;
-    const gearIndex = gears.findIndex(g => g.id === dragInfo.current?.id);
-    if (gearIndex !== -1) {
-        gears[gearIndex].x = x - dragInfo.current.offsetX;
-        gears[gearIndex].y = y - dragInfo.current.offsetY;
-        gears[gearIndex].isDragging = true;
-    }
+    const newX = x - dragInfo.current.offsetX;
+    const newY = y - dragInfo.current.offsetY;
+    
+    engine.updateGearPosition(dragInfo.current.id, newX, newY);
   };
 
   const handleEnd = () => {
-    const gears = gearsRef.current;
-    if (motorTogglePending.current && !dragInfo.current) {
-        isMotorActive.current = !isMotorActive.current;
-        gears[0].isConnected = isMotorActive.current;
-        gears[0].speed = isMotorActive.current ? 0.02 * speedMultRef.current : 0;
+    const engine = synthManager.getGearheartEngine();
+    if (engine && dragInfo.current) {
+        engine.endDrag(dragInfo.current.id);
     }
-
-    if (dragInfo.current) {
-        const gearIndex = gears.findIndex(g => g.id === dragInfo.current?.id);
-        if (gearIndex !== -1) {
-            gears[gearIndex].isDragging = false;
-        }
-        dragInfo.current = null;
-    }
-
-    motorTogglePending.current = false;
+    dragInfo.current = null;
   };
 
   return (

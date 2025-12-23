@@ -30,6 +30,10 @@ class SynthManager {
     }
   }
 
+  getGearheartEngine(): GearheartEngine | undefined {
+    return this.engines.get('gearheart') as GearheartEngine;
+  }
+
   updateParameters(state: SynthState) {
     this.activeEngine.updateParameters(state);
   }
