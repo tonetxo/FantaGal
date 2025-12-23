@@ -1,46 +1,77 @@
 import { CriosferaEngine } from './engines/CriosferaEngine';
 import { GearheartEngine } from './engines/GearheartEngine';
 import { EchoVesselEngine } from './engines/EchoVesselEngine';
+import { ISynthEngine } from './BaseSynthEngine';
+import { SynthState } from '../types';
+
+type EngineName = 'criosfera' | 'gearheart' | 'echo-vessel';
 
 class SynthManager {
-  private activeEngine: ISynthEngine;
-  private engines: Map<string, ISynthEngine>;
+  private activeEngineName: EngineName = 'criosfera';
+  private engines: Map<EngineName, ISynthEngine> = new Map();
   private ctx: AudioContext | null = null;
 
   constructor() {
-    this.engines = new Map();
-    const criosfera = new CriosferaEngine();
-    const gearheart = new GearheartEngine();
-    const echoVessel = new EchoVesselEngine();
-    
-    this.engines.set('criosfera', criosfera);
-    this.engines.set('gearheart', gearheart);
-    this.engines.set('echo-vessel', echoVessel);
-    
-    this.activeEngine = criosfera;
+    // Don't create any engines in constructor - lazy creation only
+  }
+
+  /**
+   * Gets or creates an engine by name (lazy creation)
+   */
+  private getOrCreateEngine(name: EngineName): ISynthEngine {
+    let engine = this.engines.get(name);
+    if (!engine) {
+      // Create engine on demand
+      switch (name) {
+        case 'criosfera':
+          engine = new CriosferaEngine();
+          break;
+        case 'gearheart':
+          engine = new GearheartEngine();
+          break;
+        case 'echo-vessel':
+          engine = new EchoVesselEngine();
+          break;
+      }
+      this.engines.set(name, engine);
+
+      // Initialize if AudioContext already exists
+      if (this.ctx) {
+        engine.init(this.ctx);
+      }
+    }
+    return engine;
   }
 
   async init() {
     if (!this.ctx) {
       this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
     }
-    
-    // Inicializamos todos os motores co MESMO contexto
-    for (const engine of this.engines.values()) {
-      engine.init(this.ctx);
-    }
+
+    // Only create and initialize the active engine
+    this.getOrCreateEngine(this.activeEngineName);
   }
 
   updateParameters(state: SynthState) {
-    this.activeEngine.updateParameters(state);
+    const engine = this.engines.get(this.activeEngineName);
+    if (engine) {
+      engine.updateParameters(state);
+    }
   }
 
   playNote(frequency: number, velocity?: number) {
-    return this.activeEngine.playNote(frequency, velocity);
+    const engine = this.engines.get(this.activeEngineName);
+    if (engine) {
+      return engine.playNote(frequency, velocity);
+    }
+    return undefined;
   }
 
   stopNote(id: number) {
-    this.activeEngine.stopNote(id);
+    const engine = this.engines.get(this.activeEngineName);
+    if (engine) {
+      engine.stopNote(id);
+    }
   }
 
   async resume() {
@@ -49,19 +80,24 @@ class SynthManager {
     }
   }
 
-  switchEngine(engineName: string) {
-    const engine = this.engines.get(engineName);
-    if (engine) {
-      this.activeEngine = engine;
-    }
+  switchEngine(engineName: EngineName) {
+    // Only change the active engine name - never create engines here
+    // Engines are only created when init() is called
+    this.activeEngineName = engineName;
   }
 
   getGearheartEngine(): GearheartEngine | undefined {
-    return this.engines.get('gearheart') as GearheartEngine;
+    // Only return if already created, don't create on access
+    return this.engines.get('gearheart') as GearheartEngine | undefined;
   }
-  
+
   getEchoVesselEngine(): EchoVesselEngine | undefined {
-    return this.engines.get('echo-vessel') as EchoVesselEngine;
+    // Only return if already created, don't create on access
+    return this.engines.get('echo-vessel') as EchoVesselEngine | undefined;
+  }
+
+  getCurrentEngineName(): EngineName {
+    return this.activeEngineName;
   }
 }
 

@@ -14,8 +14,24 @@ const EchoVesselUI: React.FC<EchoVesselUIProps> = ({ isActive, aiPrompt, onGener
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [engine, setEngine] = useState<EchoVesselEngine | null>(null);
     const [micActive, setMicActive] = useState(false);
-    const [speechActive, setSpeechActive] = useState(false);
-    const [selectedVial, setSelectedVial] = useState<'neutral'|'mercury'|'amber'>('neutral');
+    const [selectedVial, setSelectedVial] = useState<'neutral' | 'mercury' | 'amber'>('neutral');
+
+    // Canvas dimensions with resize handling
+    const [dimensions, setDimensions] = useState({
+        width: typeof window !== 'undefined' ? window.innerWidth : 800,
+        height: typeof window !== 'undefined' ? window.innerHeight * 0.6 : 480
+    });
+
+    useEffect(() => {
+        const handleResize = () => {
+            setDimensions({
+                width: window.innerWidth,
+                height: window.innerHeight * 0.6
+            });
+        };
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     // Init Engine Link
     useEffect(() => {
@@ -23,7 +39,6 @@ const EchoVesselUI: React.FC<EchoVesselUIProps> = ({ isActive, aiPrompt, onGener
         if (eng) {
             setEngine(eng);
             setMicActive(eng.getIsMicActive());
-            setSpeechActive(eng.getIsSpeechActive());
         }
     }, [isActive]);
 
@@ -40,23 +55,8 @@ const EchoVesselUI: React.FC<EchoVesselUIProps> = ({ isActive, aiPrompt, onGener
         }
     };
 
-    // Handle Speech Toggle
-    const toggleSpeech = () => {
-        if (!engine) return;
-        if (speechActive) {
-            engine.toggleSpeechLoop(false);
-            setSpeechActive(false);
-        } else {
-            // Use current report as seed text or default incantation
-            const text = report || "Echo Vessel. Transmutation initialized. The plasma flows.";
-            engine.setSpeechText(text);
-            engine.toggleSpeechLoop(true);
-            setSpeechActive(true);
-        }
-    };
-
     // Handle Vial Change
-    const selectVial = (vial: 'neutral'|'mercury'|'amber') => {
+    const selectVial = (vial: 'neutral' | 'mercury' | 'amber') => {
         if (!engine) return;
         engine.setVial(vial);
         setSelectedVial(vial);
@@ -69,7 +69,7 @@ const EchoVesselUI: React.FC<EchoVesselUIProps> = ({ isActive, aiPrompt, onGener
         const handleOrientation = (event: DeviceOrientationEvent) => {
             // Beta: front-back tilt [-180, 180] -> map to Z (Depth)
             // Gamma: left-right tilt [-90, 90] -> map to X (Pan)
-            
+
             const x = (event.gamma || 0) / 45; // Normalize somewhat
             const y = (event.beta || 0) / 45;
 
@@ -119,7 +119,7 @@ const EchoVesselUI: React.FC<EchoVesselUIProps> = ({ isActive, aiPrompt, onGener
             // Draw Plasma Wave
             ctx.beginPath();
             ctx.lineWidth = 4;
-            
+
             let rBase = radius * 0.9;
             if (selectedVial === 'mercury') {
                 ctx.strokeStyle = '#00ffff'; // Cyan
@@ -136,7 +136,7 @@ const EchoVesselUI: React.FC<EchoVesselUIProps> = ({ isActive, aiPrompt, onGener
             for (let i = 0; i < bufferLength; i++) {
                 const v = dataArray[i] / 128.0; // 0..2 (1 is silence)
                 const angle = (i / bufferLength) * 2 * Math.PI;
-                
+
                 // Polar conversion with modulation
                 const r = rBase + (v - 1) * 100; // Amplitude affects radius
                 const x = cx + r * Math.cos(angle);
@@ -157,13 +157,13 @@ const EchoVesselUI: React.FC<EchoVesselUIProps> = ({ isActive, aiPrompt, onGener
     return (
         <div className="w-full h-full flex flex-col items-center justify-center relative bg-[#0a0f14] overflow-hidden">
             {/* Main Visualizer */}
-            <canvas 
-                ref={canvasRef} 
-                width={window.innerWidth} 
-                height={window.innerHeight * 0.6}
+            <canvas
+                ref={canvasRef}
+                width={dimensions.width}
+                height={dimensions.height}
                 className="absolute top-0 left-0 w-full h-full z-0"
             />
-            
+
             {/* Header / Info */}
             <div className="absolute top-4 w-full text-center z-10 pointer-events-none">
                 <h2 className="text-cyan-500 font-mono tracking-[0.5em] text-xs uppercase opacity-80">ECHO VESSEL</h2>
@@ -172,63 +172,59 @@ const EchoVesselUI: React.FC<EchoVesselUIProps> = ({ isActive, aiPrompt, onGener
 
             {/* Controls Overlay */}
             <div className="absolute bottom-8 w-full max-w-md px-8 z-20 flex flex-col gap-6">
-                
+
                 {/* Input Controls */}
                 <div className="flex justify-center gap-8">
-                    <button 
+                    <button
                         onClick={toggleMic}
-                        className={`w-16 h-16 rounded-full border-2 flex items-center justify-center transition-all ${
-                            micActive 
-                            ? 'border-red-500 bg-red-900/30 text-red-500 shadow-[0_0_20px_rgba(239,68,68,0.4)]' 
-                            : 'border-slate-700 text-slate-700'
-                        }`}
+                        className={`w-16 h-16 rounded-full border-2 flex items-center justify-center transition-all ${micActive
+                                ? 'border-red-500 bg-red-900/30 text-red-500 shadow-[0_0_20px_rgba(239,68,68,0.4)]'
+                                : 'border-slate-700 text-slate-700'
+                            }`}
                     >
                         <span className="material-icons text-2xl">🎤</span>
                     </button>
 
-                    <button 
-                        onClick={toggleSpeech}
-                        className={`w-16 h-16 rounded-full border-2 flex items-center justify-center transition-all ${
-                            speechActive 
-                            ? 'border-purple-500 bg-purple-900/30 text-purple-500 shadow-[0_0_20px_rgba(168,85,247,0.4)]' 
-                            : 'border-slate-700 text-slate-700'
-                        }`}
+                    <button
+                        onClick={onGenerate}
+                        disabled={!hasApiKey}
+                        className={`w-16 h-16 rounded-full border-2 flex items-center justify-center transition-all ${hasApiKey
+                                ? 'border-cyan-500 bg-cyan-900/30 text-cyan-500 shadow-[0_0_20px_rgba(6,182,212,0.4)]'
+                                : 'border-slate-700 text-slate-700 opacity-50'
+                            }`}
                     >
-                         <span className="text-xl font-bold">AI</span>
+                        <span className="text-xl font-bold">AI</span>
                     </button>
                 </div>
 
                 {/* Vial Selectors */}
                 <div className="flex justify-between items-center bg-black/40 p-2 rounded-full border border-slate-800 backdrop-blur-sm">
-                    <button 
+                    <button
                         onClick={() => selectVial('mercury')}
-                        className={`flex-1 py-3 rounded-full text-xs uppercase tracking-widest transition-all ${
-                            selectedVial === 'mercury' 
-                            ? 'bg-cyan-900/50 text-cyan-400 shadow-inner' 
-                            : 'text-slate-600 hover:text-slate-400'
-                        }`}
+                        className={`flex-1 py-3 rounded-full text-xs uppercase tracking-widest transition-all ${selectedVial === 'mercury'
+                                ? 'bg-cyan-900/50 text-cyan-400 shadow-inner'
+                                : 'text-slate-600 hover:text-slate-400'
+                            }`}
                     >
                         Mercurio
                     </button>
                     <div className="w-px h-6 bg-slate-800"></div>
-                    <button 
-                         onClick={() => selectVial('neutral')}
-                         className={`flex-1 py-3 rounded-full text-xs uppercase tracking-widest transition-all ${
-                            selectedVial === 'neutral' 
-                            ? 'bg-slate-800 text-white shadow-inner' 
-                            : 'text-slate-600 hover:text-slate-400'
-                        }`}
+                    <button
+                        onClick={() => selectVial('neutral')}
+                        className={`flex-1 py-3 rounded-full text-xs uppercase tracking-widest transition-all ${selectedVial === 'neutral'
+                                ? 'bg-slate-800 text-white shadow-inner'
+                                : 'text-slate-600 hover:text-slate-400'
+                            }`}
                     >
                         Neutro
                     </button>
                     <div className="w-px h-6 bg-slate-800"></div>
-                    <button 
+                    <button
                         onClick={() => selectVial('amber')}
-                        className={`flex-1 py-3 rounded-full text-xs uppercase tracking-widest transition-all ${
-                            selectedVial === 'amber' 
-                            ? 'bg-amber-900/50 text-amber-400 shadow-inner' 
-                            : 'text-slate-600 hover:text-slate-400'
-                        }`}
+                        className={`flex-1 py-3 rounded-full text-xs uppercase tracking-widest transition-all ${selectedVial === 'amber'
+                                ? 'bg-amber-900/50 text-amber-400 shadow-inner'
+                                : 'text-slate-600 hover:text-slate-400'
+                            }`}
                     >
                         Ámbar
                     </button>

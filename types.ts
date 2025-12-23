@@ -5,7 +5,6 @@ export interface SynthState {
   viscosity: number;
   turbulence: number;
   diffusion: number;
-  isAudioActive: boolean;
 }
 
 export interface PlanetaryCondition {

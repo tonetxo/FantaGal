@@ -8,13 +8,14 @@ export async function fetchTitanCondition(prompt: string, apiKey: string): Promi
 
   const ai = new GoogleGenAI({ apiKey });
   try {
+    console.log("Enviando prompt a Gemini con modelo gemini-3-flash-preview...");
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: [{
         role: "user",
         parts: [{
-          text: `Analiza a atmosfera de Titán para a seguinte solicitude: "${prompt}". 
-          Devolve un informe meteorolóxico que dite como se comportarían as tubaxes de resonancia física e os transmutadores vocais. 
+          text: `Analiza a atmosfera de Titán para a seguinte solicitude: "${prompt}".
+          Devolve un informe meteorolóxico que dite como se comportarían as tubaxes de resonancia física e os transmutadores vocais.
           A descrición debe estar en galego e ser mística, poética e moi breve (máximo 15 palabras) para ser recitada por un oráculo.`
         }]
       }],
@@ -39,22 +40,8 @@ export async function fetchTitanCondition(prompt: string, apiKey: string): Promi
         },
       },
     });
-    
-    // Asumimos que response.text é unha propiedade como no commit anterior que funcionaba
-    const responseText = response.text; 
-    console.log("Resposta recibida:", responseText);
-    
-    if (typeof responseText === 'string') {
-        return JSON.parse(responseText);
-    } else {
-        // Fallback se fose unha función ou obxecto inesperado (por seguridade)
-        console.warn("response.text non é string:", responseText);
-        // Se fose unha función no novo SDK, tentamos chamala:
-        if (typeof (response as any).text === 'function') {
-             return JSON.parse((response as any).text());
-        }
-        return JSON.parse(JSON.stringify(responseText));
-    }
+    console.log("Resposta recibida:", response.text);
+    return JSON.parse(response.text);
   } catch (e: any) {
     console.error("Erro detallado de Gemini:", e);
     console.error("Mensaxe de erro:", e.message);
