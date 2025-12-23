@@ -27,6 +27,7 @@ const GearSequencer = ({ gearConfig, diffusion = 0.5 }: GearSequencerProps) => {
   const particlesRef = useRef<Particle[]>([]);
   const requestRef = useRef<number>(0);
   const dragInfo = useRef<{ id: number, offsetX: number, offsetY: number } | null>(null);
+  const hasStartedAudio = useRef(false);
 
   // Sync Config to Engine
   useEffect(() => {
@@ -266,57 +267,93 @@ const GearSequencer = ({ gearConfig, diffusion = 0.5 }: GearSequencerProps) => {
     return () => cancelAnimationFrame(requestRef.current);
   }, []); 
 
-  const handleStart = (clientX: number, clientY: number) => {
-    synthManager.resume();
-    
-    const engine = synthManager.getGearheartEngine();
-    if (!engine) return;
+  // --- INTERACTION LOGIC ---
+
+  const handleStart = (e: React.MouseEvent | React.TouchEvent) => {
+    // Prevent default on touch to avoid ghost mouse events
+    if ('touches' in e && e.cancelable) {
+       // e.preventDefault(); 
+    }
+
+    if (!hasStartedAudio.current) {
+        synthManager.resume();
+        hasStartedAudio.current = true;
+    }
 
     const canvas = canvasRef.current;
     if (!canvas) return;
+    
+    // Normalize coordinates
+    let clientX, clientY;
+    if ('touches' in e) {
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+    } else {
+        clientX = (e as React.MouseEvent).clientX;
+        clientY = (e as React.MouseEvent).clientY;
+    }
+
     const rect = canvas.getBoundingClientRect();
     const x = clientX - rect.left;
     const y = clientY - rect.top;
 
-    const gears = engine.getGears();
-    const motor = gears[0];
-    const dxMotor = x - motor.x;
-    const dyMotor = y - motor.y;
-    
-    // Check Motor Click
-    if (Math.sqrt(dxMotor*dxMotor + dyMotor*dyMotor) < motor.radius) {
-        engine.toggleMotor();
-        return;
-    }
+    const engine = synthManager.getGearheartEngine();
+    if (!engine) return;
 
-    // Check Drag
+    const gears = engine.getGears();
+    
+    // 1. Check Draggable Gears FIRST
     const hitGears = [];
     for (let i = 0; i < gears.length; i++) {
         const g = gears[i];
+        // Skip Motor (id 0) for drag check
+        if (g.id === 0) continue;
+
         const dx = x - g.x;
         const dy = y - g.y;
         const distance = Math.sqrt(dx*dx + dy*dy);
-        if (distance < g.radius && g.id !== 0) {
+        
+        if (distance < g.radius) {
             hitGears.push({ index: i, gear: g, distance: distance });
         }
     }
 
     if (hitGears.length > 0) {
-        hitGears.sort((a, b) => a.gear.radius - b.gear.radius);
-        const selected = hitGears[0];
+        // We hit a draggable gear -> Start Dragging
+        hitGears.sort((a, b) => a.gear.radius - b.gear.radius); 
+        const selected = hitGears[0]; 
         const g = selected.gear;
         const dx = x - g.x;
         const dy = y - g.y;
 
         dragInfo.current = { id: g.id, offsetX: dx, offsetY: dy };
         engine.updateGearPosition(g.id, g.x, g.y); 
+        return; // Stop here, don't check motor
+    }
+
+    // 2. If no gear hit, Check Motor (with expanded hitbox)
+    const motor = gears[0];
+    const dxMotor = x - motor.x;
+    const dyMotor = y - motor.y;
+    // Expanded Hitbox (1.2x)
+    if (Math.sqrt(dxMotor*dxMotor + dyMotor*dyMotor) < motor.radius * 1.2) {
+        engine.toggleMotor();
     }
   };
 
-  const handleMove = (clientX: number, clientY: number) => {
+  const handleMove = (e: React.MouseEvent | React.TouchEvent) => {
     if (!dragInfo.current) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
+
+    let clientX, clientY;
+    if ('touches' in e) {
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+    } else {
+        clientX = (e as React.MouseEvent).clientX;
+        clientY = (e as React.MouseEvent).clientY;
+    }
     
     const engine = synthManager.getGearheartEngine();
     if (!engine) return;
@@ -346,16 +383,16 @@ const GearSequencer = ({ gearConfig, diffusion = 0.5 }: GearSequencerProps) => {
         width={window.innerWidth}
         height={window.innerHeight * 0.6}
         className="touch-none cursor-pointer"
-        onMouseDown={e => handleStart(e.clientX, e.clientY)}
-        onMouseMove={e => handleMove(e.clientX, e.clientY)}
+        onMouseDown={handleStart}
+        onMouseMove={handleMove}
         onMouseUp={handleEnd}
         onMouseLeave={handleEnd}
-        onTouchStart={e => handleStart(e.touches[0].clientX, e.touches[0].clientY)}
-        onTouchMove={e => handleMove(e.touches[0].clientX, e.touches[0].clientY)}
+        onTouchStart={handleStart}
+        onTouchMove={handleMove}
         onTouchEnd={handleEnd}
       />
       <div className="absolute bottom-4 text-[#cd7f32] text-[10px] font-mono pointer-events-none opacity-60 uppercase tracking-widest w-full text-center shadow-black drop-shadow-md">
-        Arrastra as engrenaxes para acoplalas ao Motor | Toca o Motor para deter/activar
+        Arrastra as engrenaxes para acoplalas ao Motor | Mantén pulsado o Motor para deter/activar
       </div>
     </div>
   );
