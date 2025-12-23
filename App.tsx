@@ -7,6 +7,7 @@ import Visualizer from './components/Visualizer';
 import ControlSlider from './components/ControlSlider';
 import BubbleXYPad from './components/BubbleXYPad';
 import GearSequencer from './components/GearSequencer';
+import EchoVesselUI from './components/EchoVesselUI';
 
 const NOTES = [
   { label: 'C2', freq: 65.41 },
@@ -34,8 +35,16 @@ const PARAM_LABELS_GEARHEART: Record<string, string> = {
   diffusion: "DIFUSIÓN ÉTER"
 };
 
+const PARAM_LABELS_ECHO_VESSEL: Record<string, string> = {
+  pressure: "RETROALIMENTACIÓN",
+  resonance: "FILTRADO ÁMBAR",
+  viscosity: "RETARDO FLUIDO",
+  turbulence: "MODULACIÓN MERCURIO",
+  diffusion: "DIFUSIÓN ESPACIAL"
+};
+
 interface ControlsPanelProps {
-  currentEngine: 'criosfera' | 'gearheart';
+  currentEngine: 'criosfera' | 'gearheart' | 'echo-vessel';
   theme: any;
   state: SynthState;
   handleStart: () => void;
@@ -69,10 +78,11 @@ const ControlsPanel = ({
       <header className="mb-8 md:mb-12 flex justify-between items-start">
         <div>
           <h1 className={`text-2xl md:text-3xl font-bold tracking-tighter ${theme.accent} mb-1 uppercase`}>
-            {currentEngine}
+            {currentEngine.replace('-', ' ')}
           </h1>
           <h2 className="text-[9px] md:text-[10px] uppercase tracking-[0.3em] opacity-50">
-            {currentEngine === 'criosfera' ? 'Modulador Atmosférico' : 'Matriz de Ritmo'}
+            {currentEngine === 'criosfera' ? 'Modulador Atmosférico' : 
+             currentEngine === 'gearheart' ? 'Matriz de Ritmo' : 'Transmutador Vocal'}
           </h2>
         </div>
         <button onClick={() => setIsSettingsOpen(true)} className="hidden md:block p-2 opacity-50 hover:opacity-100">
@@ -99,7 +109,8 @@ const ControlsPanel = ({
 
       <div className={`pt-6 border-t ${theme.border} mt-auto`}>
         <div className="text-[10px] uppercase tracking-widest opacity-50 mb-4 font-bold">
-            {currentEngine === 'criosfera' ? 'Xerador de atmósferas' : 'Xerador de Maquinaria (IA)'}
+            {currentEngine === 'criosfera' ? 'Xerador de atmósferas' : 
+             currentEngine === 'gearheart' ? 'Xerador de Maquinaria (IA)' : 'Xerador de Profecías'}
         </div>
         <div className="relative">
           <input 
@@ -127,7 +138,7 @@ const ControlsPanel = ({
 );
 
 function App() {
-  const [currentEngine, setCurrentEngine] = useState<'criosfera' | 'gearheart'>('criosfera');
+  const [currentEngine, setCurrentEngine] = useState<'criosfera' | 'gearheart' | 'echo-vessel'>('criosfera');
   
   const [state, setState] = useState<SynthState>({
     pressure: 0.7,
@@ -155,12 +166,27 @@ function App() {
   const activeNotesRef = useRef<Map<number, number>>(new Map());
 
   // Labels actuais segundo motor
-  const labels = currentEngine === 'criosfera' ? PARAM_LABELS_CRIOSFERA : PARAM_LABELS_GEARHEART;
+  const getLabels = () => {
+      switch(currentEngine) {
+          case 'criosfera': return PARAM_LABELS_CRIOSFERA;
+          case 'gearheart': return PARAM_LABELS_GEARHEART;
+          case 'echo-vessel': return PARAM_LABELS_ECHO_VESSEL;
+          default: return PARAM_LABELS_CRIOSFERA;
+      }
+  }
+  const labels = getLabels();
   
   // Theme colors
-  const theme = currentEngine === 'criosfera' 
-    ? { bg: 'bg-stone-950', text: 'text-stone-100', accent: 'text-orange-500', border: 'border-stone-800' }
-    : { bg: 'bg-[#151210]', text: 'text-[#d4c5a9]', accent: 'text-[#ffbf69]', border: 'border-[#b08d55]/30' };
+  const getTheme = () => {
+      if (currentEngine === 'criosfera') {
+          return { bg: 'bg-stone-950', text: 'text-stone-100', accent: 'text-orange-500', border: 'border-stone-800' };
+      } else if (currentEngine === 'gearheart') {
+          return { bg: 'bg-[#151210]', text: 'text-[#d4c5a9]', accent: 'text-[#ffbf69]', border: 'border-[#b08d55]/30' };
+      } else {
+          return { bg: 'bg-[#0a0f14]', text: 'text-slate-200', accent: 'text-cyan-500', border: 'border-cyan-900/30' };
+      }
+  }
+  const theme = getTheme();
 
   useEffect(() => {
     const loadKey = async () => {
@@ -189,12 +215,12 @@ function App() {
     setState(prev => ({ ...prev, isAudioActive: true }));
   };
 
-  const handleEngineChange = (engine: 'criosfera' | 'gearheart') => {
+  const handleEngineChange = (engine: 'criosfera' | 'gearheart' | 'echo-vessel') => {
     setCurrentEngine(engine);
     synthManager.switchEngine(engine);
-    setTitanReport(engine === 'criosfera' 
-      ? 'Modo sustain activo: alterna as teclas.' 
-      : 'Matriz de ritmo lista. Arrastra as engrenaxes.');
+    if (engine === 'criosfera') setTitanReport('Modo sustain activo: alterna as teclas.');
+    else if (engine === 'gearheart') setTitanReport('Matriz de ritmo lista. Arrastra as engrenaxes.');
+    else setTitanReport('Alquimia vocal. Usa os viais e captura a túa voz.');
   };
 
   const updateParam = (param: ParameterType, value: number) => {
@@ -236,20 +262,38 @@ function App() {
     setIsAiLoading(true);
     try {
       const condition = await fetchTitanCondition(aiPrompt, apiKey);
+      
+      // Use values from AI or fallbacks to prevent crash
+      const s = {
+        turbulence: condition.stormLevel ?? 0.5,
+        viscosity: condition.methaneDensity ?? 0.5,
+        pressure: condition.temperature ?? 0.5,
+        resonance: 0.5 + ((condition.stormLevel ?? 0.5) * 0.5),
+        diffusion: 0.3 + ((condition.methaneDensity ?? 0.5) * 0.4)
+      };
+
       setState(prev => ({
         ...prev,
-        turbulence: condition.stormLevel,
-        viscosity: condition.methaneDensity,
-        pressure: condition.temperature,
-        resonance: 0.5 + (condition.stormLevel * 0.5),
-        diffusion: 0.3 + (condition.methaneDensity * 0.4)
+        ...s
       }));
+
       if (condition.gearConfig) {
         setCurrentGearConfig(condition.gearConfig);
       }
-      setTitanReport(condition.description);
-    } catch (err) {
-      setTitanReport("Erro de conexión ou clave inválida.");
+      
+      const reportText = condition.description || "Transmutación completada.";
+      setTitanReport(reportText);
+
+      // Update Speech Text if in Echo Vessel
+      if (currentEngine === 'echo-vessel') {
+          const echoEngine = synthManager.getEchoVesselEngine();
+          if (echoEngine) {
+              echoEngine.setSpeechText(reportText);
+          }
+      }
+    } catch (err: any) {
+      console.error("AI Patch Error:", err);
+      setTitanReport("Erro ao consultar o Oráculo. Revisa a túa conexión ou API Key.");
     } finally {
       setIsAiLoading(false);
     }
@@ -287,7 +331,7 @@ function App() {
         <div className="flex gap-1 bg-black/40 backdrop-blur-xl p-1 rounded-full border border-white/10 pointer-events-auto shadow-xl">
           <button 
             onClick={() => handleEngineChange('criosfera')}
-            className={`px-4 py-1 rounded-full text-[10px] uppercase tracking-widest transition-all ${
+            className={`px-3 py-1 rounded-full text-[9px] uppercase tracking-widest transition-all ${
               currentEngine === 'criosfera' ? 'bg-stone-800 text-orange-400 shadow-sm' : 'opacity-50 hover:opacity-100'
             }`}
           >
@@ -295,11 +339,19 @@ function App() {
           </button>
           <button 
             onClick={() => handleEngineChange('gearheart')}
-            className={`px-4 py-1 rounded-full text-[10px] uppercase tracking-widest transition-all ${
+            className={`px-3 py-1 rounded-full text-[9px] uppercase tracking-widest transition-all ${
               currentEngine === 'gearheart' ? 'bg-[#3a2e26] text-[#ffbf69] shadow-sm' : 'opacity-50 hover:opacity-100'
             }`}
           >
             Gearheart
+          </button>
+          <button 
+            onClick={() => handleEngineChange('echo-vessel')}
+            className={`px-3 py-1 rounded-full text-[9px] uppercase tracking-widest transition-all ${
+              currentEngine === 'echo-vessel' ? 'bg-cyan-900 text-cyan-400 shadow-sm' : 'opacity-50 hover:opacity-100'
+            }`}
+          >
+            Echo Vessel
           </button>
         </div>
       </div>
@@ -354,7 +406,7 @@ function App() {
         
         <div className="md:hidden absolute top-0 left-0 w-full flex justify-between items-center p-6 pt-16 z-40 pointer-events-none">
           <div className="pointer-events-auto">
-            <h1 className={`text-xl font-bold tracking-tighter ${theme.accent} uppercase`}>{currentEngine}</h1>
+            <h1 className={`text-xl font-bold tracking-tighter ${theme.accent} uppercase`}>{currentEngine.replace('-', ' ')}</h1>
           </div>
           <div className="flex gap-2 pointer-events-auto">
             <button 
@@ -426,14 +478,23 @@ function App() {
                         </div>
                     </div>
                 </>
-            ) : (
+            ) : currentEngine === 'gearheart' ? (
                 <div className="w-full h-full relative">
                     <GearSequencer 
-                      onTrigger={handleGearTrigger} 
                       speedMultiplier={0.5 + (state.viscosity * 1.5)}
                       diffusion={state.diffusion}
                       turbulence={state.turbulence}
                       gearConfig={currentGearConfig}
+                    />
+                </div>
+            ) : (
+                <div className="w-full h-full relative">
+                    <EchoVesselUI 
+                        isActive={currentEngine === 'echo-vessel'}
+                        aiPrompt={aiPrompt}
+                        onGenerate={generateAIPatch}
+                        hasApiKey={!!apiKey}
+                        report={titanReport}
                     />
                 </div>
             )}
@@ -443,7 +504,6 @@ function App() {
   );
 }
 
-// Wrapper simple para o menú móbil
 const ControlsContentWrapper = ({ children }: { children: React.ReactNode }) => (
     <div className="h-full w-full">{children}</div>
 );

@@ -1,7 +1,6 @@
-import { SynthState } from '../types';
-import { ISynthEngine } from './BaseSynthEngine';
 import { CriosferaEngine } from './engines/CriosferaEngine';
 import { GearheartEngine } from './engines/GearheartEngine';
+import { EchoVesselEngine } from './engines/EchoVesselEngine';
 
 class SynthManager {
   private activeEngine: ISynthEngine;
@@ -12,9 +11,11 @@ class SynthManager {
     this.engines = new Map();
     const criosfera = new CriosferaEngine();
     const gearheart = new GearheartEngine();
+    const echoVessel = new EchoVesselEngine();
     
     this.engines.set('criosfera', criosfera);
     this.engines.set('gearheart', gearheart);
+    this.engines.set('echo-vessel', echoVessel);
     
     this.activeEngine = criosfera;
   }
@@ -28,10 +29,6 @@ class SynthManager {
     for (const engine of this.engines.values()) {
       engine.init(this.ctx);
     }
-  }
-
-  getGearheartEngine(): GearheartEngine | undefined {
-    return this.engines.get('gearheart') as GearheartEngine;
   }
 
   updateParameters(state: SynthState) {
@@ -57,6 +54,14 @@ class SynthManager {
     if (engine) {
       this.activeEngine = engine;
     }
+  }
+
+  getGearheartEngine(): GearheartEngine | undefined {
+    return this.engines.get('gearheart') as GearheartEngine;
+  }
+  
+  getEchoVesselEngine(): EchoVesselEngine | undefined {
+    return this.engines.get('echo-vessel') as EchoVesselEngine;
   }
 }
 
