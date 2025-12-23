@@ -23,8 +23,15 @@ export async function fetchTitanCondition(prompt: string, apiKey: string): Promi
             temperature: { type: Type.NUMBER, description: "Escala 0-1 (baixo é máis frío)" },
             methaneDensity: { type: Type.NUMBER, description: "Escala 0-1" },
             description: { type: Type.STRING, description: "Unha descrición poética do estado sonoro en galego." },
+            gearConfig: {
+                type: Type.OBJECT,
+                properties: {
+                    numGears: { type: Type.NUMBER, description: "Número de engranaxes (3-8)" },
+                    arrangement: { type: Type.STRING, enum: ["linear", "cluster", "chaotic"], description: "Disposición xeométrica" }
+                }
+            }
           },
-          required: ["stormLevel", "temperature", "methaneDensity", "description"],
+          required: ["stormLevel", "temperature", "methaneDensity", "description", "gearConfig"],
         },
       },
     });
@@ -41,7 +48,8 @@ export async function fetchTitanCondition(prompt: string, apiKey: string): Promi
       stormLevel: 0.5,
       temperature: 0.2,
       methaneDensity: 0.8,
-      description: "Erro ao interpretar a resposta de Titán. A atmosfera é inestable."
+      description: "Erro ao interpretar a resposta de Titán. A atmosfera é inestable.",
+      gearConfig: { numGears: 5, arrangement: "cluster" }
     };
   }
 }

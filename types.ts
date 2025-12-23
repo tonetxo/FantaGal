@@ -13,6 +13,10 @@ export interface PlanetaryCondition {
   temperature: number;
   methaneDensity: number;
   description: string;
+  gearConfig?: {
+    numGears: number;
+    arrangement: 'linear' | 'cluster' | 'chaotic';
+  };
 }
 
 export enum ParameterType {

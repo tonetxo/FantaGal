@@ -144,6 +144,7 @@ function App() {
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [titanReport, setTitanReport] = useState<string>('Sistema en espera...');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [currentGearConfig, setCurrentGearConfig] = useState<{ numGears: number; arrangement: string } | null>(null);
   
   const [xyParams, setXyParams] = useState({
     x: ParameterType.RESONANCE,
@@ -240,8 +241,12 @@ function App() {
         turbulence: condition.stormLevel,
         viscosity: condition.methaneDensity,
         pressure: condition.temperature,
-        resonance: 0.5 + (condition.stormLevel * 0.5)
+        resonance: 0.5 + (condition.stormLevel * 0.5),
+        diffusion: 0.3 + (condition.methaneDensity * 0.4)
       }));
+      if (condition.gearConfig) {
+        setCurrentGearConfig(condition.gearConfig);
+      }
       setTitanReport(condition.description);
     } catch (err) {
       setTitanReport("Erro de conexión ou clave inválida.");
@@ -251,10 +256,8 @@ function App() {
   };
 
   const handleGearTrigger = (radius: number) => {
-    const baseFreq = 110;
-    const multiplier = 100 / radius; 
-    const freq = baseFreq * multiplier;
-    synthManager.playNote(freq);
+    // Passamos o radio directamente ao engine para que determine o tipo de son (Bombo/Timbal)
+    synthManager.playNote(radius);
   };
 
   return (
@@ -425,7 +428,13 @@ function App() {
                 </>
             ) : (
                 <div className="w-full h-full relative">
-                    <GearSequencer onTrigger={handleGearTrigger} />
+                    <GearSequencer 
+                      onTrigger={handleGearTrigger} 
+                      speedMultiplier={0.5 + (state.viscosity * 1.5)}
+                      diffusion={state.diffusion}
+                      turbulence={state.turbulence}
+                      gearConfig={currentGearConfig}
+                    />
                 </div>
             )}
         </main>
