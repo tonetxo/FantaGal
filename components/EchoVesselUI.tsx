@@ -82,20 +82,34 @@ const EchoVesselUI: React.FC<EchoVesselUIProps> = ({ isActive, aiPrompt, onGener
 
     // Visualizer Loop
     useEffect(() => {
-        if (!isActive || !engine) return;
-        const analyser = engine.getAnalyser();
-        if (!analyser) return;
+        if (!isActive) return;
 
-        const bufferLength = analyser.frequencyBinCount;
-        const dataArray = new Uint8Array(bufferLength);
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        // Use a dummy array if engine not ready yet
+        let analyser = engine ? engine.getAnalyser() : null;
+        let dataArray = new Uint8Array(analyser ? analyser.frequencyBinCount : 128);
         let animationId: number;
 
         const render = () => {
             animationId = requestAnimationFrame(render);
-            analyser.getByteTimeDomainData(dataArray);
 
-            const canvas = canvasRef.current;
-            if (!canvas) return;
+            // Try to get analyser again if we didn't have it
+            if (!analyser && engine) {
+                analyser = engine.getAnalyser();
+                if (analyser) {
+                    dataArray = new Uint8Array(analyser.frequencyBinCount);
+                }
+            }
+
+            if (analyser) {
+                analyser.getByteTimeDomainData(dataArray);
+            } else {
+                // If no analyser, fill with silence (128)
+                dataArray.fill(128);
+            }
+
             const ctx = canvas.getContext('2d');
             if (!ctx) return;
 
@@ -133,9 +147,9 @@ const EchoVesselUI: React.FC<EchoVesselUIProps> = ({ isActive, aiPrompt, onGener
             }
             ctx.shadowBlur = 15;
 
-            for (let i = 0; i < bufferLength; i++) {
+            for (let i = 0; i < dataArray.length; i++) {
                 const v = dataArray[i] / 128.0; // 0..2 (1 is silence)
-                const angle = (i / bufferLength) * 2 * Math.PI;
+                const angle = (i / dataArray.length) * 2 * Math.PI;
 
                 // Polar conversion with modulation
                 const r = rBase + (v - 1) * 100; // Amplitude affects radius
@@ -178,8 +192,8 @@ const EchoVesselUI: React.FC<EchoVesselUIProps> = ({ isActive, aiPrompt, onGener
                     <button
                         onClick={toggleMic}
                         className={`w-16 h-16 rounded-full border-2 flex items-center justify-center transition-all ${micActive
-                                ? 'border-red-500 bg-red-900/30 text-red-500 shadow-[0_0_20px_rgba(239,68,68,0.4)]'
-                                : 'border-slate-700 text-slate-700'
+                            ? 'border-red-500 bg-red-900/30 text-red-500 shadow-[0_0_20px_rgba(239,68,68,0.4)]'
+                            : 'border-slate-700 text-slate-700'
                             }`}
                     >
                         <span className="material-icons text-2xl">🎤</span>
@@ -189,8 +203,8 @@ const EchoVesselUI: React.FC<EchoVesselUIProps> = ({ isActive, aiPrompt, onGener
                         onClick={onGenerate}
                         disabled={!hasApiKey}
                         className={`w-16 h-16 rounded-full border-2 flex items-center justify-center transition-all ${hasApiKey
-                                ? 'border-cyan-500 bg-cyan-900/30 text-cyan-500 shadow-[0_0_20px_rgba(6,182,212,0.4)]'
-                                : 'border-slate-700 text-slate-700 opacity-50'
+                            ? 'border-cyan-500 bg-cyan-900/30 text-cyan-500 shadow-[0_0_20px_rgba(6,182,212,0.4)]'
+                            : 'border-slate-700 text-slate-700 opacity-50'
                             }`}
                     >
                         <span className="text-xl font-bold">AI</span>
@@ -202,8 +216,8 @@ const EchoVesselUI: React.FC<EchoVesselUIProps> = ({ isActive, aiPrompt, onGener
                     <button
                         onClick={() => selectVial('mercury')}
                         className={`flex-1 py-3 rounded-full text-xs uppercase tracking-widest transition-all ${selectedVial === 'mercury'
-                                ? 'bg-cyan-900/50 text-cyan-400 shadow-inner'
-                                : 'text-slate-600 hover:text-slate-400'
+                            ? 'bg-cyan-900/50 text-cyan-400 shadow-inner'
+                            : 'text-slate-600 hover:text-slate-400'
                             }`}
                     >
                         Mercurio
@@ -212,8 +226,8 @@ const EchoVesselUI: React.FC<EchoVesselUIProps> = ({ isActive, aiPrompt, onGener
                     <button
                         onClick={() => selectVial('neutral')}
                         className={`flex-1 py-3 rounded-full text-xs uppercase tracking-widest transition-all ${selectedVial === 'neutral'
-                                ? 'bg-slate-800 text-white shadow-inner'
-                                : 'text-slate-600 hover:text-slate-400'
+                            ? 'bg-slate-800 text-white shadow-inner'
+                            : 'text-slate-600 hover:text-slate-400'
                             }`}
                     >
                         Neutro
@@ -222,8 +236,8 @@ const EchoVesselUI: React.FC<EchoVesselUIProps> = ({ isActive, aiPrompt, onGener
                     <button
                         onClick={() => selectVial('amber')}
                         className={`flex-1 py-3 rounded-full text-xs uppercase tracking-widest transition-all ${selectedVial === 'amber'
-                                ? 'bg-amber-900/50 text-amber-400 shadow-inner'
-                                : 'text-slate-600 hover:text-slate-400'
+                            ? 'bg-amber-900/50 text-amber-400 shadow-inner'
+                            : 'text-slate-600 hover:text-slate-400'
                             }`}
                     >
                         Ámbar

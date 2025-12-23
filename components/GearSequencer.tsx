@@ -82,14 +82,17 @@ const GearSequencer = ({ gearConfig, diffusion = 0.5 }: GearSequencerProps) => {
 
     const update = () => {
         const canvas = canvasRef.current;
-        if (!canvas) return;
+        if (!canvas) {
+            requestRef.current = requestAnimationFrame(update);
+            return;
+        }
         const ctx = canvas.getContext('2d');
-        if (!ctx) return;
+        if (!ctx) {
+            requestRef.current = requestAnimationFrame(update);
+            return;
+        }
 
-        const engine = synthManager.getGearheartEngine();
-        if (!engine) return;
-
-        // Background - Rusty Iron
+        // Background - Rusty Iron (always draw background)
         const bgGradient = ctx.createRadialGradient(
             canvas.width / 2, canvas.height / 2, 0,
             canvas.width / 2, canvas.height / 2, canvas.width
@@ -100,6 +103,13 @@ const GearSequencer = ({ gearConfig, diffusion = 0.5 }: GearSequencerProps) => {
 
         ctx.fillStyle = bgGradient;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const engine = synthManager.getGearheartEngine();
+        if (!engine || !engine.isReady()) {
+            // Engine not ready - continue loop but don't draw gears
+            requestRef.current = requestAnimationFrame(update);
+            return;
+        }
 
         // Vibration/Shake from Engine
         const vibration = engine.vibration;
