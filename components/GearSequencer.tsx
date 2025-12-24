@@ -18,9 +18,10 @@ interface GearSequencerProps {
     diffusion?: number;
     gearConfig?: { numGears: number; arrangement: string } | null;
     onConfigApplied?: () => void;
+    isActive?: boolean;
 }
 
-const GearSequencer = ({ gearConfig, diffusion = 0.5, onConfigApplied }: GearSequencerProps) => {
+const GearSequencer = ({ gearConfig, diffusion = 0.5, onConfigApplied, isActive = true }: GearSequencerProps) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const particlesRef = useRef<Particle[]>([]);
     const requestRef = useRef<number>(0);
@@ -391,6 +392,8 @@ const GearSequencer = ({ gearConfig, diffusion = 0.5, onConfigApplied }: GearSeq
     // --- INTERACTION LOGIC ---
 
     const handleStart = (e: React.MouseEvent | React.TouchEvent) => {
+        if (!isActive) return;
+
         // Prevent default on touch to avoid ghost mouse events
         if ('touches' in e && e.cancelable) {
             // e.preventDefault(); 

@@ -119,8 +119,17 @@ export class GearheartEngine implements ISynthEngine {
     ];
   }
 
+  private lastConfig: string = '';
+
   public setGearConfig(gearConfig: { numGears: number; arrangement: string } | null) {
     if (!gearConfig) return;
+
+    // Create a fingerprint of the config to prevent unnecessary resets
+    const configFingerprint = `${gearConfig.numGears}-${gearConfig.arrangement}`;
+    if (this.lastConfig === configFingerprint && this.gears.length > 0) {
+      return; // Already configured, keep state
+    }
+    this.lastConfig = configFingerprint;
 
     const newGears: Gear[] = [];
     const width = window.innerWidth;

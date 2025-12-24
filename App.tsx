@@ -594,6 +594,7 @@ function App() {
             <div className="w-full h-full relative">
               <GearSequencer
                 diffusion={state.diffusion}
+                isActive={isCurrentEngineActive}
               />
             </div>
           ) : (
