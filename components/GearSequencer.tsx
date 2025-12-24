@@ -150,7 +150,7 @@ const GearSequencer = ({ gearConfig, diffusion = 0.5, onConfigApplied }: GearSeq
                         const dx = g.x - other.x;
                         const dy = g.y - other.y;
                         const dist = Math.sqrt(dx * dx + dy * dy);
-                        if (dist < g.radius + other.radius + 12) {
+                        if (dist < g.radius + other.radius + 18) {
                             ctx.beginPath();
                             ctx.moveTo(g.x, g.y);
                             ctx.lineTo(other.x, other.y);

@@ -14,6 +14,7 @@ export interface Gear {
   isDragging: boolean;
   isConnected: boolean;
   material: 'bronze' | 'copper' | 'gold' | 'platinum' | 'iron';
+  lastRotation: number; // For robust trigger detection
 }
 
 export class GearheartEngine implements ISynthEngine {
@@ -109,11 +110,11 @@ export class GearheartEngine implements ISynthEngine {
     const centerX = width / 2;
 
     this.gears = [
-      { id: 0, x: 150, y: 300, radius: 60, teeth: 12, angle: 0, speed: 0.02, isDragging: false, isConnected: true, material: 'iron' }, // Motor
-      { id: 1, x: 300, y: 200, radius: 40, teeth: 8, angle: 0, speed: 0, isDragging: false, isConnected: false, material: 'bronze' },
-      { id: 2, x: 100, y: 150, radius: 30, teeth: 6, angle: 0, speed: 0, isDragging: false, isConnected: false, material: 'copper' },
-      { id: 3, x: 250, y: 400, radius: 50, teeth: 10, angle: 0, speed: 0, isDragging: false, isConnected: false, material: 'gold' },
-      { id: 4, x: 200, y: 100, radius: 25, teeth: 5, angle: 0, speed: 0, isDragging: false, isConnected: false, material: 'platinum' },
+      { id: 0, x: 150, y: 300, radius: 60, teeth: 12, angle: 0, speed: 0.02, isDragging: false, isConnected: true, material: 'iron', lastRotation: 0 }, // Motor
+      { id: 1, x: 300, y: 200, radius: 40, teeth: 8, angle: 0, speed: 0, isDragging: false, isConnected: false, material: 'bronze', lastRotation: 0 },
+      { id: 2, x: 100, y: 150, radius: 30, teeth: 6, angle: 0, speed: 0, isDragging: false, isConnected: false, material: 'copper', lastRotation: 0 },
+      { id: 3, x: 250, y: 400, radius: 50, teeth: 10, angle: 0, speed: 0, isDragging: false, isConnected: false, material: 'gold', lastRotation: 0 },
+      { id: 4, x: 200, y: 100, radius: 25, teeth: 5, angle: 0, speed: 0, isDragging: false, isConnected: false, material: 'platinum', lastRotation: 0 },
     ];
   }
 
@@ -140,7 +141,8 @@ export class GearheartEngine implements ISynthEngine {
       speed: 0.02,
       isDragging: false,
       isConnected: true,
-      material: 'iron'
+      material: 'iron',
+      lastRotation: 0
     });
 
     const count = Math.max(3, Math.min(8, gearConfig.numGears));
@@ -186,7 +188,8 @@ export class GearheartEngine implements ISynthEngine {
         speed: 0,
         isDragging: false,
         isConnected: true,
-        material: materials[i % materials.length]
+        material: materials[i % materials.length],
+        lastRotation: 0
       });
 
       lastX = x;
@@ -278,7 +281,8 @@ export class GearheartEngine implements ISynthEngine {
     // Energy Propagation (Iterative Flood Fill)
     let changed = true;
     let iterations = 0;
-    while (changed && iterations < 10) {
+    // Increase iterations to ensure propatagion in complex chains
+    while (changed && iterations < 30) {
       changed = false;
       iterations++;
 
@@ -294,7 +298,7 @@ export class GearheartEngine implements ISynthEngine {
           const dy = gears[i].y - gears[j].y;
           const dist = Math.sqrt(dx * dx + dy * dy);
           const combinedRadius = gears[i].radius + gears[j].radius;
-          const margin = 12;
+          const margin = 18; // Increased margin for easier connection
 
           if (dist < combinedRadius + margin) {
             gears[j].isConnected = true;
@@ -308,16 +312,14 @@ export class GearheartEngine implements ISynthEngine {
     // Update Angles and Trigger Sound
     gears.forEach(g => {
       if (g.isConnected) {
-        const prevAngle = g.angle;
-        g.angle += g.speed;
+        g.angle += g.speed; // Restore angular movement!
+        const currentRotation = Math.floor(g.angle / (Math.PI * 2));
 
-        const normPrev = Math.abs(prevAngle % (Math.PI * 2));
-        const normCurr = Math.abs(g.angle % (Math.PI * 2));
-
-        // Check for full rotation (trigger)
-        if (normCurr < normPrev && Math.abs(normCurr - normPrev) > 0.1) {
+        // Check for full rotation change
+        if (currentRotation !== g.lastRotation) {
           // INTERNAL AUDIO TRIGGER
           this.internalTrigger(g.radius, g.id);
+          g.lastRotation = currentRotation;
         }
       }
     });
@@ -501,13 +503,13 @@ export class GearheartEngine implements ISynthEngine {
     const now = this.ctx.currentTime;
     const decay = 0.4 + (this.turbulence * 0.3);
 
-    // Sub-bass oscillator for deep kick
+    // Sub-bass oscillator for deep kick - Deeper and Louder
     const subOsc = this.ctx.createOscillator();
     subOsc.type = 'sine';
-    subOsc.frequency.setValueAtTime(60, now);
-    subOsc.frequency.exponentialRampToValueAtTime(25, now + 0.15);
+    subOsc.frequency.setValueAtTime(55, now); // Lower start frequency for deeper thud
+    subOsc.frequency.exponentialRampToValueAtTime(30, now + 0.15);
 
-    // Click/attack transient
+    // Click/attack transient - Punchier
     const clickOsc = this.ctx.createOscillator();
     clickOsc.type = 'triangle';
     clickOsc.frequency.setValueAtTime(150, now);
@@ -515,12 +517,12 @@ export class GearheartEngine implements ISynthEngine {
 
     // Sub envelope
     const subEnv = this.ctx.createGain();
-    subEnv.gain.setValueAtTime(1.0, now);
+    subEnv.gain.setValueAtTime(1.5, now); // Boosted gain (was 1.0)
     subEnv.gain.exponentialRampToValueAtTime(0.001, now + decay);
 
     // Click envelope
     const clickEnv = this.ctx.createGain();
-    clickEnv.gain.setValueAtTime(0.6, now);
+    clickEnv.gain.setValueAtTime(0.8, now); // Boosted click (was 0.6)
     clickEnv.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
 
     // Connect
@@ -551,8 +553,10 @@ export class GearheartEngine implements ISynthEngine {
 
     // Dynamic volume: progressively lower for higher frequencies
     // This provides a natural balance where bass is felt more than treble
-    const freqFactor = Math.max(0, 1 - (frequency / 600));
-    const baseVol = 0.2 + (freqFactor * 0.4); // Ranges from ~0.25 (highs) to 0.6 (lows)
+    // Dynamic volume: steep drop for higher frequencies
+    // This makes small toms much quieter as requested
+    const freqFactor = Math.max(0, 1 - (frequency / 500));
+    const baseVol = 0.1 + (freqFactor * 0.5); // Ranges from ~0.1 (highs) to 0.6 (lows)
 
     // Main envelope
     const env = this.ctx.createGain();
