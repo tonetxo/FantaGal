@@ -36,6 +36,18 @@ export class EchoVesselEngine implements ISynthEngine {
     private synthesisVoice: SpeechSynthesisVoice | null = null;
     private isInitialized: boolean = false;
 
+    constructor() {
+        if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+            // Eager load voices
+            const loadVoices = () => {
+                const voices = window.speechSynthesis.getVoices();
+                this.synthesisVoice = voices.find(v => v.lang.includes('es') || v.lang.includes('gl')) || null;
+            };
+            window.speechSynthesis.onvoiceschanged = loadVoices;
+            loadVoices();
+        }
+    }
+
     async init(ctx: AudioContext) {
         // Prevent double initialization
         if (this.isInitialized) return;
@@ -289,32 +301,33 @@ export class EchoVesselEngine implements ISynthEngine {
         }
     }
 
-    public speakOnce() {
-        if (!this.currentSpeechText) return; // Speak regardless of speechActive state for one-time calls
 
-        // Safety check for Browser/WebView compatibility
+
+    public speakOnce() {
+        if (!this.currentSpeechText) return;
+
+        // Safety check
         if (typeof window === 'undefined' || !('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) {
-            console.warn("Speech Synthesis not supported in this environment.");
             return;
         }
 
         try {
+            // Cancel previous
+            window.speechSynthesis.cancel();
+
             const utterance = new SpeechSynthesisUtterance(this.currentSpeechText);
+            utterance.lang = 'es-ES'; // Explicit language hint
+
             if (this.synthesisVoice) utterance.voice = this.synthesisVoice;
 
-            // Alchemical Voice Settings
-            utterance.pitch = 0.6; // Deep
-            utterance.rate = 0.8; // Slow and deliberate
-            utterance.volume = 0.6;
-
-            // When speech ends, don't repeat - just finish
-            utterance.onend = () => {
-                // Speech has ended naturally
-            };
+            // Safer settings for Android compatibility
+            utterance.pitch = 1.0;
+            utterance.rate = 0.9;
+            utterance.volume = 1.0;
 
             window.speechSynthesis.speak(utterance);
         } catch (e) {
-            console.error("Error initializing speech synthesis:", e);
+            console.error("Error speech:", e);
         }
     }
 

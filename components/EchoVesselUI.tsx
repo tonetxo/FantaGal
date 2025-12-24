@@ -182,7 +182,12 @@ const EchoVesselUI: React.FC<EchoVesselUIProps> = ({ isActive, engine, aiPrompt,
             {/* Header / Info */}
             <div className="absolute top-4 w-full text-center z-10 pointer-events-none">
                 <h2 className="text-cyan-500 font-mono tracking-[0.5em] text-xs uppercase opacity-80">ECHO VESSEL</h2>
-                <p className="text-xs text-slate-500 mt-1 font-mono">{report ? "Invocación Activa" : "Esperando Materia..."}</p>
+                <p
+                    onClick={() => engine?.speakOnce()}
+                    className="text-xs text-slate-500 mt-1 font-mono max-w-[80%] mx-auto cursor-pointer pointer-events-auto"
+                >
+                    {report || "Esperando Materia..."}
+                </p>
             </div>
 
             {/* Controls Overlay */}
