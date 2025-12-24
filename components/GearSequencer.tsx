@@ -97,6 +97,13 @@ const GearSequencer = ({ gearConfig, diffusion = 0.5, onConfigApplied }: GearSeq
         }
     };
 
+    const getRGB = (hex: string): string => {
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+        return `${r}, ${g}, ${b}`;
+    };
+
     const update = () => {
         const canvas = canvasRef.current;
         if (!canvas) {
@@ -178,6 +185,70 @@ const GearSequencer = ({ gearConfig, diffusion = 0.5, onConfigApplied }: GearSeq
 
             ctx.save();
             ctx.translate(g.x, g.y);
+
+            // --- Visual Coordinate Axes (Trembling) ---
+            const [axisLight, axisMid, axisDark] = getGradientColors(g.material);
+            ctx.save();
+
+            // Independent Jitter for Holographic Effect
+            if (engine.vibration > 0) {
+                const axisJitterX = (Math.random() - 0.5) * engine.vibration * 0.5;
+                const axisJitterY = (Math.random() - 0.5) * engine.vibration * 0.5;
+                ctx.translate(axisJitterX, axisJitterY);
+            }
+
+            // Infinite length (enough to cover mostly any mobile screen from center)
+            const axisLen = Math.max(canvas.width, canvas.height);
+
+            ctx.lineWidth = 1;
+            ctx.globalAlpha = 0.5;
+
+            // X Axis Gradient (Fade out ends)
+            const xGrad = ctx.createLinearGradient(-axisLen, 0, axisLen, 0);
+            xGrad.addColorStop(0, "transparent");
+            xGrad.addColorStop(0.2, "transparent");
+            xGrad.addColorStop(0.4, `rgba(${getRGB(axisLight)}, 0.1)`);
+            xGrad.addColorStop(0.5, axisLight);
+            xGrad.addColorStop(0.6, `rgba(${getRGB(axisLight)}, 0.1)`);
+            xGrad.addColorStop(0.8, "transparent");
+            xGrad.addColorStop(1, "transparent");
+
+            ctx.strokeStyle = xGrad;
+            ctx.beginPath();
+            ctx.moveTo(-axisLen, 0);
+            ctx.lineTo(axisLen, 0);
+            ctx.stroke();
+
+            // Y Axis Gradient
+            const yGrad = ctx.createLinearGradient(0, -axisLen, 0, axisLen);
+            yGrad.addColorStop(0, "transparent");
+            yGrad.addColorStop(0.2, "transparent");
+            yGrad.addColorStop(0.4, `rgba(${getRGB(axisLight)}, 0.1)`);
+            yGrad.addColorStop(0.5, axisLight);
+            yGrad.addColorStop(0.6, `rgba(${getRGB(axisLight)}, 0.1)`);
+            yGrad.addColorStop(0.8, "transparent");
+            yGrad.addColorStop(1, "transparent");
+
+            ctx.strokeStyle = yGrad;
+            ctx.beginPath();
+            ctx.moveTo(0, -axisLen);
+            ctx.lineTo(0, axisLen);
+            ctx.stroke();
+
+            // Center Crosshair (Solid)
+            ctx.beginPath();
+            ctx.strokeStyle = axisDark;
+            ctx.lineWidth = 1.5;
+            ctx.globalAlpha = 0.9;
+            ctx.moveTo(-5, 0);
+            ctx.lineTo(5, 0);
+            ctx.moveTo(0, -5);
+            ctx.lineTo(0, 5);
+            ctx.stroke();
+
+            ctx.restore();
+            // ------------------------------------------
+
             ctx.rotate(g.angle);
 
             // Halo for Motor
