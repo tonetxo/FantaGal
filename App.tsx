@@ -39,7 +39,7 @@ const PARAM_LABELS_GEARHEART: Record<string, string> = {
 const PARAM_LABELS_ECHO_NEUTRAL: Record<string, string> = {
   pressure: "GANANCIA",
   resonance: "—",
-  viscosity: "—",
+  viscosity: "ECO",
   turbulence: "—",
   diffusion: "ESPACIALIDADE"
 };
@@ -276,8 +276,13 @@ function App() {
           gearEngine.stopPhysicsLoop();
           gearEngine.initGears(); // Reset to initial gear configuration
         }
+      } else if (currentEngine === 'echo-vessel') {
+        const echoEngine = synthManager.getEchoVesselEngine();
+        if (echoEngine) {
+          echoEngine.setMicEnabled(false);
+          echoEngine.stopSpeech();
+        }
       }
-      // Echo Vessel doesn't need special cleanup (mic is handled separately)
 
       // Clear the AI report when deactivating
       setTitanReport('Sistema en espera...');

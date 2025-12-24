@@ -91,6 +91,7 @@ export class EchoVesselEngine implements ISynthEngine {
         this.analyser.connect(this.ctx.destination);
 
         // Initialize Effects
+        this.setupDelay(); // Initialize delay first as it's shared
         this.setupMercury();
         this.setupAmber();
 
@@ -102,6 +103,7 @@ export class EchoVesselEngine implements ISynthEngine {
         // Mic will be requested only when user explicitly enables it.
 
         this.isInitialized = true;
+        this.setVial('neutral'); // Ensure initial connections are made!
     }
 
     // --- Microphone Handling ---
@@ -209,6 +211,21 @@ export class EchoVesselEngine implements ISynthEngine {
 
     // --- Effects Logic ---
 
+    private setupDelay() {
+        if (!this.ctx) return;
+
+        // Tape Delay (Global)
+        this.delay = this.ctx.createDelay(2.0);
+        this.delay.delayTime.value = 0.35; // Default "Eco" time
+
+        this.delayFeedback = this.ctx.createGain();
+        this.delayFeedback.gain.value = 0.3;
+
+        // Feedback loop
+        this.delay.connect(this.delayFeedback);
+        this.delayFeedback.connect(this.delay);
+    }
+
     private setupMercury() {
         if (!this.ctx) return;
         // Ring Mod: Input * Oscillator
@@ -235,42 +252,47 @@ export class EchoVesselEngine implements ISynthEngine {
         this.distortion.curve = makeDistortionCurve(100); // Heavy saturation
         this.distortion.oversample = '4x';
 
-        // Tape Delay
-        this.delay = this.ctx.createDelay(2.0);
-        this.delay.delayTime.value = 0.4;
-
-        this.delayFeedback = this.ctx.createGain();
-        this.delayFeedback.gain.value = 0.4;
-
         // Filter for dub feel
         const filter = this.ctx.createBiquadFilter();
         filter.type = 'lowpass';
         filter.frequency.value = 1200;
 
-        // Chain: Distortion -> Filter -> Delay -> Feedback -> Delay
+        // Chain: Distortion -> Filter -> Delay (Global)
         this.distortion.connect(filter);
-        filter.connect(this.delay);
-        this.delay.connect(this.delayFeedback);
-        this.delayFeedback.connect(this.delay);
+        if (this.delay) {
+            filter.connect(this.delay);
+        }
     }
 
     public setVial(vial: VialType) {
         if (!this.ctx || !this.inputGain) return;
         this.currentVial = vial;
 
-        // Reset connections
+        // Reset connections - strictly disconnect manageable nodes
         this.inputGain.disconnect();
         this.mercuryGain?.disconnect();
         this.distortion?.disconnect();
         this.delay?.disconnect();
 
+        // Restore feedback loop (otherwise echo dies after 1 repetition)
+        if (this.delay && this.delayFeedback) {
+            this.delay.connect(this.delayFeedback);
+            this.delayFeedback.connect(this.delay);
+        }
+
         // Always connect input to dry for base signal
         this.inputGain.connect(this.dryGain!);
 
         if (vial === 'neutral') {
-            // Direct pass-through
+            // Clean delay with user control
+            // Route input to delay
+            this.inputGain.connect(this.delay!);
+            // Delay output to wet
+            this.delay!.connect(this.wetGain!);
+
             this.dryGain!.gain.setTargetAtTime(1.0, this.ctx.currentTime, 0.1);
-            this.wetGain!.gain.setTargetAtTime(0.0, this.ctx.currentTime, 0.1);
+            // Wet gain (Echo volume) - ensure it's loud enough by default
+            this.wetGain!.gain.setTargetAtTime(0.5, this.ctx.currentTime, 0.1);
         } else if (vial === 'mercury') {
             // Route input through mercury effect to wet
             this.inputGain.connect(this.mercuryGain!);
@@ -284,9 +306,6 @@ export class EchoVesselEngine implements ISynthEngine {
             // Connect distortion output to both wet gain and delay
             this.distortion!.connect(this.wetGain!);
             this.distortion!.connect(this.delay!);
-            // Feedback loop for delay
-            this.delay!.connect(this.delayFeedback!);
-            this.delayFeedback!.connect(this.delay!);
             // Also send delay output to wet gain
             this.delay!.connect(this.wetGain!);
 
@@ -429,6 +448,15 @@ export class EchoVesselEngine implements ISynthEngine {
             // Viscosity -> Delay Time
             const dTime = 0.1 + (state.viscosity * 1.0);
             this.delay?.delayTime.setTargetAtTime(dTime, t, 0.1);
+        } else if (this.currentVial === 'neutral') {
+            // Viscosity -> "ECO" (Amount + Feedback)
+            const echoAmount = state.viscosity;
+
+            // Wet gain increases with echo amount - Much louder (up to 80%)
+            this.wetGain?.gain.setTargetAtTime(echoAmount * 0.8, t, 0.1);
+
+            // Feedback increases with echo amount (up to 75%)
+            this.delayFeedback?.gain.setTargetAtTime(echoAmount * 0.75, t, 0.1);
         }
     }
 

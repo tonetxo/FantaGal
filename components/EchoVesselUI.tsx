@@ -44,7 +44,7 @@ const EchoVesselUI: React.FC<EchoVesselUIProps> = ({ isActive, engine, aiPrompt,
 
     // Handle Mic Toggle
     const toggleMic = async () => {
-        if (!engine) return;
+        if (!engine || !isActive) return;
 
         if (micActive) {
             engine.setMicEnabled(false);
@@ -58,7 +58,7 @@ const EchoVesselUI: React.FC<EchoVesselUIProps> = ({ isActive, engine, aiPrompt,
 
     // Handle Vial Change
     const selectVial = (vial: 'neutral' | 'mercury' | 'amber') => {
-        if (!engine) return;
+        if (!engine || !isActive) return;
 
         engine.setVial(vial);
         setSelectedVial(vial);
@@ -182,7 +182,7 @@ const EchoVesselUI: React.FC<EchoVesselUIProps> = ({ isActive, engine, aiPrompt,
     }, [report]);
 
     const toggleSpeech = async () => {
-        if (!engine || !report) return;
+        if (!engine || !report || !isActive) return;
 
         if (isSpeaking) {
             // STOP
@@ -239,7 +239,7 @@ const EchoVesselUI: React.FC<EchoVesselUIProps> = ({ isActive, engine, aiPrompt,
             </div>
 
             {/* Controls Overlay */}
-            <div className="absolute bottom-8 w-full max-w-lg px-4 z-20 flex flex-col gap-6">
+            <div className={`absolute bottom-8 w-full max-w-lg px-4 z-20 flex flex-col gap-6 transition-opacity duration-500 ${!isActive ? 'opacity-30 pointer-events-none grayscale' : ''}`}>
 
                 {/* Input Controls - use full width */}
                 <div className="flex justify-between w-full">
