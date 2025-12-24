@@ -82,7 +82,15 @@ export class EchoVesselEngine implements ISynthEngine {
         this.setupMercury();
         this.setupAmber();
 
-
+        // Warm up TTS to prevent first-call distortion
+        // (Play silence to initialize audio path)
+        try {
+            TextToSpeech.speak({
+                text: ' ',
+                volume: 0.1,
+                rate: 2.0
+            }).catch(() => { });
+        } catch (e) { /* ignore */ }
 
         // Preload Mic Stream (Eager Init)
         this.prepareMic();
@@ -278,11 +286,19 @@ export class EchoVesselEngine implements ISynthEngine {
 
 
 
+    // Sympathetic Resonance (Drone for TTS)
+    private sympatheticOsc: OscillatorNode | null = null;
+    private sympatheticGain: GainNode | null = null;
+
     public async speakOnce() {
         if (!this.currentSpeechText) return;
 
         try {
             await TextToSpeech.stop();
+
+            // Start "Sympathetic Resonance" (Drone that feeds the effects)
+            this.startSympatheticResonance();
+
             await TextToSpeech.speak({
                 text: this.currentSpeechText,
                 lang: 'es-ES',
@@ -291,17 +307,68 @@ export class EchoVesselEngine implements ISynthEngine {
                 volume: 1.0,
                 category: 'ambient',
             });
+
+            // Stop resonance when speech finishes normally
+            this.stopSympatheticResonance();
+
         } catch (e) {
             console.error("TTS Error:", e);
+            this.stopSympatheticResonance();
         }
     }
 
     public async stopSpeech() {
         try {
+            this.stopSympatheticResonance();
             await TextToSpeech.stop();
         } catch (e) {
             console.error("TTS Stop Error:", e);
         }
+    }
+
+    private startSympatheticResonance() {
+        if (!this.ctx || !this.inputGain) return;
+
+        // Stop any existing
+        this.stopSympatheticResonance();
+
+        const t = this.ctx.currentTime;
+
+        this.sympatheticOsc = this.ctx.createOscillator();
+        this.sympatheticGain = this.ctx.createGain();
+
+        // Low drone based on turbulence
+        // (Simulates the voice resonating in the pipes)
+        this.sympatheticOsc.type = 'triangle';
+        this.sympatheticOsc.frequency.value = 55 + (Math.random() * 20); // Deep A1 base + variation
+
+        // Connect to InputGain so it goes through Mercury/Amber/Reverb
+        this.sympatheticOsc.connect(this.sympatheticGain);
+        this.sympatheticGain.connect(this.inputGain);
+
+        this.sympatheticGain.gain.setValueAtTime(0, t);
+        this.sympatheticGain.gain.linearRampToValueAtTime(0.3, t + 0.5); // Fade in
+
+        this.sympatheticOsc.start(t);
+    }
+
+    private stopSympatheticResonance() {
+        if (!this.ctx || !this.sympatheticOsc || !this.sympatheticGain) return;
+
+        const t = this.ctx.currentTime;
+        // Fade out
+        this.sympatheticGain.gain.cancelScheduledValues(t);
+        this.sympatheticGain.gain.setValueAtTime(this.sympatheticGain.gain.value, t);
+        this.sympatheticGain.gain.exponentialRampToValueAtTime(0.001, t + 1.0);
+
+        this.sympatheticOsc.stop(t + 1.1);
+
+        // Clean references
+        const oldOsc = this.sympatheticOsc;
+        setTimeout(() => { oldOsc.disconnect(); }, 1200);
+
+        this.sympatheticOsc = null;
+        this.sympatheticGain = null;
     }
 
     // --- Standard Interface Implementation ---
