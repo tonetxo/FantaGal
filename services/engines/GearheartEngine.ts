@@ -15,6 +15,7 @@ export interface Gear {
   isConnected: boolean;
   material: 'bronze' | 'copper' | 'gold' | 'platinum' | 'iron';
   lastRotation: number; // For robust trigger detection
+  depth: number; // Distance from motor (0 = motor, 1 = connected to motor, etc.)
 }
 
 export class GearheartEngine implements ISynthEngine {
@@ -110,11 +111,11 @@ export class GearheartEngine implements ISynthEngine {
     const centerX = width / 2;
 
     this.gears = [
-      { id: 0, x: 150, y: 300, radius: 60, teeth: 12, angle: 0, speed: 0.02, isDragging: false, isConnected: true, material: 'iron', lastRotation: 0 }, // Motor
-      { id: 1, x: 300, y: 200, radius: 40, teeth: 8, angle: 0, speed: 0, isDragging: false, isConnected: false, material: 'bronze', lastRotation: 0 },
-      { id: 2, x: 100, y: 150, radius: 30, teeth: 6, angle: 0, speed: 0, isDragging: false, isConnected: false, material: 'copper', lastRotation: 0 },
-      { id: 3, x: 250, y: 400, radius: 50, teeth: 10, angle: 0, speed: 0, isDragging: false, isConnected: false, material: 'gold', lastRotation: 0 },
-      { id: 4, x: 200, y: 100, radius: 25, teeth: 5, angle: 0, speed: 0, isDragging: false, isConnected: false, material: 'platinum', lastRotation: 0 },
+      { id: 0, x: 150, y: 300, radius: 60, teeth: 12, angle: 0, speed: 0.02, isDragging: false, isConnected: true, material: 'iron', lastRotation: 0, depth: 0 }, // Motor
+      { id: 1, x: 300, y: 200, radius: 40, teeth: 8, angle: 0, speed: 0, isDragging: false, isConnected: false, material: 'bronze', lastRotation: 0, depth: 999 },
+      { id: 2, x: 100, y: 150, radius: 30, teeth: 6, angle: 0, speed: 0, isDragging: false, isConnected: false, material: 'copper', lastRotation: 0, depth: 999 },
+      { id: 3, x: 250, y: 400, radius: 50, teeth: 10, angle: 0, speed: 0, isDragging: false, isConnected: false, material: 'gold', lastRotation: 0, depth: 999 },
+      { id: 4, x: 200, y: 100, radius: 25, teeth: 5, angle: 0, speed: 0, isDragging: false, isConnected: false, material: 'platinum', lastRotation: 0, depth: 999 },
     ];
   }
 
@@ -142,7 +143,8 @@ export class GearheartEngine implements ISynthEngine {
       isDragging: false,
       isConnected: true,
       material: 'iron',
-      lastRotation: 0
+      lastRotation: 0,
+      depth: 0
     });
 
     const count = Math.max(3, Math.min(8, gearConfig.numGears));
@@ -189,7 +191,8 @@ export class GearheartEngine implements ISynthEngine {
         isDragging: false,
         isConnected: true,
         material: materials[i % materials.length],
-        lastRotation: 0
+        lastRotation: 0,
+        depth: 999
       });
 
       lastX = x;
@@ -266,15 +269,18 @@ export class GearheartEngine implements ISynthEngine {
     // Update Motor
     gears[0].isConnected = this.isMotorActive;
     gears[0].speed = this.isMotorActive ? 0.02 * this.speedMultiplier : 0;
+    gears[0].depth = 0; // Motor is always root
 
     // Reset non-motors/non-connected
     for (let i = 1; i < gears.length; i++) {
       if (gears[i].isDragging) {
         gears[i].isConnected = false;
         gears[i].speed = 0;
+        gears[i].depth = 999;
       } else {
         gears[i].isConnected = false;
         gears[i].speed = 0;
+        gears[i].depth = 999;
       }
     }
 
@@ -303,6 +309,7 @@ export class GearheartEngine implements ISynthEngine {
           if (dist < combinedRadius + margin) {
             gears[j].isConnected = true;
             gears[j].speed = -gears[i].speed * (gears[i].radius / gears[j].radius);
+            gears[j].depth = gears[i].depth + 1; // Propagate depth
             changed = true;
           }
         }
@@ -367,19 +374,27 @@ export class GearheartEngine implements ISynthEngine {
 
     if (isMotor) {
       this.playKickDrum();
-    } else if (isHiHat) {
-      this.playClosedHiHat();
-    } else if (isBrushSnare) {
-      this.playBrushSnare();
     } else {
-      const drumFrequency = this.mapRadiusToDrumFrequency(radius);
-      this.playTomDrum(drumFrequency);
+      // Attenuate volume based on depth (distance from motor)
+      // Gain = 0.2 + (0.8 * (0.85 ^ depth))
+      // Ensures it never goes below 0.2, but drops significantly with distance
+      const depth = gear ? gear.depth : 0;
+      const attenuation = Math.max(0.2, Math.pow(0.85, depth));
+
+      if (isHiHat) {
+        this.playClosedHiHat(attenuation);
+      } else if (isBrushSnare) {
+        this.playBrushSnare(attenuation);
+      } else {
+        const drumFrequency = this.mapRadiusToDrumFrequency(radius);
+        this.playTomDrum(drumFrequency, attenuation);
+      }
     }
 
     return 1;
   }
 
-  private playClosedHiHat() {
+  private playClosedHiHat(volume: number = 1.0) {
     if (!this.ctx || !this.masterGain) return;
     const now = this.ctx.currentTime;
     const duration = 0.05;
@@ -401,7 +416,7 @@ export class GearheartEngine implements ISynthEngine {
     filter.Q.setValueAtTime(1, now);
 
     const env = this.ctx.createGain();
-    env.gain.setValueAtTime(0.3, now);
+    env.gain.setValueAtTime(0.3 * volume, now);
     env.gain.exponentialRampToValueAtTime(0.001, now + duration);
 
     noise.connect(filter);
@@ -412,7 +427,7 @@ export class GearheartEngine implements ISynthEngine {
     noise.stop(now + duration);
   }
 
-  private playBrushSnare() {
+  private playBrushSnare(volume: number = 1.0) {
     if (!this.ctx || !this.masterGain) return;
     const now = this.ctx.currentTime;
     const duration = 0.15;
@@ -435,7 +450,7 @@ export class GearheartEngine implements ISynthEngine {
 
     const noiseEnv = this.ctx.createGain();
     noiseEnv.gain.setValueAtTime(0, now);
-    noiseEnv.gain.linearRampToValueAtTime(0.1, now + 0.02);
+    noiseEnv.gain.linearRampToValueAtTime(0.1 * volume, now + 0.02);
     noiseEnv.gain.exponentialRampToValueAtTime(0.001, now + duration);
 
     // Body component (tonal part of the snare)
@@ -445,7 +460,7 @@ export class GearheartEngine implements ISynthEngine {
     bodyOsc.frequency.exponentialRampToValueAtTime(100, now + 0.1);
 
     const bodyEnv = this.ctx.createGain();
-    bodyEnv.gain.setValueAtTime(0.1, now);
+    bodyEnv.gain.setValueAtTime(0.1 * volume, now);
     bodyEnv.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
 
     // Connections
@@ -537,7 +552,7 @@ export class GearheartEngine implements ISynthEngine {
     clickOsc.stop(now + 0.05);
   }
 
-  private playTomDrum(frequency: number) {
+  private playTomDrum(frequency: number, volume: number = 1.0) {
     if (!this.ctx || !this.masterGain) return;
     const now = this.ctx.currentTime;
 
@@ -560,7 +575,7 @@ export class GearheartEngine implements ISynthEngine {
 
     // Main envelope
     const env = this.ctx.createGain();
-    env.gain.setValueAtTime(baseVol, now);
+    env.gain.setValueAtTime(baseVol * volume, now);
     env.gain.exponentialRampToValueAtTime(0.001, now + decay);
 
     // Connect
