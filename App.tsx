@@ -279,6 +279,9 @@ function App() {
       }
       // Echo Vessel doesn't need special cleanup (mic is handled separately)
 
+      // Clear the AI report when deactivating
+      setTitanReport('Sistema en espera...');
+
       // Deactivate: remove from initialized set
       setInitializedEngines(prev => {
         const next = new Set(prev);
@@ -526,6 +529,15 @@ function App() {
             </button>
           </div>
         </div>
+
+        {/* AI Generated Text Overlay - between engine selector and header */}
+        {isCurrentEngineActive && titanReport && titanReport !== 'Sistema en espera...' && (
+          <div className="md:hidden absolute top-4 left-0 w-full px-6 z-30 pointer-events-none">
+            <div className={`text-xs ${theme.accent} opacity-70 font-mono tracking-wide text-center`}>
+              {titanReport}
+            </div>
+          </div>
+        )}
 
         <main className="flex-1 flex flex-col justify-center md:justify-end p-6 md:p-12 items-center relative w-full h-full">
           {currentEngine === 'criosfera' ? (
