@@ -27,6 +27,9 @@ export class EchoVesselEngine implements ISynthEngine {
     private delay: DelayNode | null = null;
     private delayFeedback: GainNode | null = null;
 
+    // Anti-feedback filter
+    private antiCouplingFilter: BiquadFilterNode | null = null;
+
     // State
     private currentVial: VialType = 'neutral';
     private isMicActive: boolean = false;
@@ -42,25 +45,34 @@ export class EchoVesselEngine implements ISynthEngine {
 
         this.ctx = ctx;
         this.masterGain = this.ctx.createGain();
-        this.masterGain.gain.value = 0.8;
+        this.masterGain.gain.value = 1.0; // Increased for better volume
 
         this.analyser = this.ctx.createAnalyser();
         this.analyser.fftSize = 2048;
 
         // Spatial Audio (Gyroscope target)
+        // Using 'equalpower' instead of 'HRTF' to avoid volume changes
         this.panner = this.ctx.createPanner();
-        this.panner.panningModel = 'HRTF';
-        this.panner.distanceModel = 'inverse';
+        this.panner.panningModel = 'equalpower';
+        this.panner.distanceModel = 'linear';
         this.panner.refDistance = 1;
-        this.panner.maxDistance = 10000;
+        this.panner.maxDistance = 2;
+        this.panner.rolloffFactor = 0; // No volume change with distance
         this.panner.positionX.value = 0;
         this.panner.positionY.value = 0;
-        this.panner.positionZ.value = 1; // In front of user
+        this.panner.positionZ.value = 1;
 
         // Internal routing gains
         this.inputGain = this.ctx.createGain();
+        this.inputGain.gain.value = 0.85; // Balanced: not too loud to feedback, not too quiet
         this.dryGain = this.ctx.createGain();
         this.wetGain = this.ctx.createGain();
+
+        // Anti-coupling high-pass filter (removes low frequencies that cause feedback)
+        this.antiCouplingFilter = this.ctx.createBiquadFilter();
+        this.antiCouplingFilter.type = 'highpass';
+        this.antiCouplingFilter.frequency.value = 80; // Cut below 80Hz
+        this.antiCouplingFilter.Q.value = 0.7;
 
         // Default Mix
         this.dryGain.gain.value = 1.0;
@@ -82,18 +94,12 @@ export class EchoVesselEngine implements ISynthEngine {
         this.setupMercury();
         this.setupAmber();
 
-        // Warm up TTS to prevent first-call distortion
-        // (Play silence to initialize audio path)
-        try {
-            TextToSpeech.speak({
-                text: ' ',
-                volume: 0.1,
-                rate: 2.0
-            }).catch(() => { });
-        } catch (e) { /* ignore */ }
+        // NOTE: Removed TTS warm-up as it can trigger Android audio mode change
+        // which reduces media volume. TTS will initialize on first actual use.
 
-        // Preload Mic Stream (Eager Init)
-        this.prepareMic();
+        // NOTE: Also removed mic preload here - requesting mic access on Android
+        // triggers "communication mode" which reduces media volume.
+        // Mic will be requested only when user explicitly enables it.
 
         this.isInitialized = true;
     }
@@ -115,9 +121,9 @@ export class EchoVesselEngine implements ISynthEngine {
                 console.log("Requesting Mic Access (Preload)...");
                 this.micStream = await navigator.mediaDevices.getUserMedia({
                     audio: {
-                        echoCancellation: false,
-                        noiseSuppression: false,
-                        autoGainControl: false
+                        echoCancellation: true,  // ENABLED to reduce feedback/coupling
+                        noiseSuppression: false, // Keep false for natural sound
+                        autoGainControl: false   // Keep false for consistent levels
                     }
                 });
                 console.log("Mic Access Granted (Preloaded)");
@@ -141,20 +147,53 @@ export class EchoVesselEngine implements ISynthEngine {
 
             if (!this.micStream || !this.ctx || !this.inputGain) return;
 
+            // Start with gain at 0 for smooth fade-in
+            const t = this.ctx.currentTime;
+            this.inputGain.gain.setValueAtTime(0, t);
+
             // Connect if not already connected
             if (!this.micSource) {
                 this.micSource = this.ctx.createMediaStreamSource(this.micStream);
-                this.micSource.connect(this.inputGain);
+                // Route through anti-coupling filter first
+                this.micSource.connect(this.antiCouplingFilter!);
+                this.antiCouplingFilter!.connect(this.inputGain);
             }
 
             // Enable tracks
             this.micStream.getAudioTracks().forEach(track => track.enabled = true);
+
+            // Smooth fade-in to avoid click
+            this.inputGain.gain.linearRampToValueAtTime(0.85, t + 0.05);
+
             this.isMicActive = true;
         } else {
-            // Just disable tracks (mute), don't destroy stream
-            if (this.micStream) {
-                this.micStream.getAudioTracks().forEach(track => track.enabled = false);
+            if (!this.ctx || !this.inputGain) {
+                this.isMicActive = false;
+                return;
             }
+
+            // Smooth fade-out before disconnecting to avoid click
+            const t = this.ctx.currentTime;
+            this.inputGain.gain.setValueAtTime(this.inputGain.gain.value, t);
+            this.inputGain.gain.linearRampToValueAtTime(0, t + 0.05);
+
+            // Wait for fade-out, then fully stop
+            setTimeout(() => {
+                // FULLY STOP the mic stream so Android exits "communication mode"
+                if (this.micStream) {
+                    this.micStream.getAudioTracks().forEach(track => {
+                        track.stop();
+                    });
+                }
+                // Disconnect the source node
+                if (this.micSource) {
+                    this.micSource.disconnect();
+                    this.micSource = null;
+                }
+                // Clear the stream reference
+                this.micStream = null;
+            }, 60);
+
             this.isMicActive = false;
         }
     }

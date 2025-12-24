@@ -60,7 +60,7 @@ export class GearheartEngine implements ISynthEngine {
     this.compressor.knee.setValueAtTime(10, this.ctx.currentTime);
 
     this.masterGain = this.ctx.createGain();
-    this.masterGain.gain.value = 0.15;
+    this.masterGain.gain.value = 0.5;
 
     // Reverb Setup
     this.reverb = this.ctx.createConvolver();

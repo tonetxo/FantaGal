@@ -35,12 +35,29 @@ const PARAM_LABELS_GEARHEART: Record<string, string> = {
   diffusion: "DIFUSIÓN ÉTER"
 };
 
-const PARAM_LABELS_ECHO_VESSEL: Record<string, string> = {
-  pressure: "RETROALIMENTACIÓN",
-  resonance: "FILTRADO ÁMBAR",
-  viscosity: "RETARDO FLUIDO",
-  turbulence: "MODULACIÓN MERCURIO",
-  diffusion: "DIFUSIÓN ESPACIAL"
+// Echo Vessel labels change based on selected vial
+const PARAM_LABELS_ECHO_NEUTRAL: Record<string, string> = {
+  pressure: "GANANCIA",
+  resonance: "—",
+  viscosity: "—",
+  turbulence: "—",
+  diffusion: "ESPACIALIDADE"
+};
+
+const PARAM_LABELS_ECHO_MERCURY: Record<string, string> = {
+  pressure: "GANANCIA",
+  resonance: "TONO MODULADOR",
+  viscosity: "—",
+  turbulence: "FREQ. MODULACIÓN",
+  diffusion: "ESPACIALIDADE"
+};
+
+const PARAM_LABELS_ECHO_AMBER: Record<string, string> = {
+  pressure: "FEEDBACK DELAY",
+  resonance: "SATURACIÓN",
+  viscosity: "TEMPO DELAY",
+  turbulence: "—",
+  diffusion: "ESPACIALIDADE"
 };
 
 interface ControlsPanelProps {
@@ -163,6 +180,7 @@ function App() {
   const [titanReport, setTitanReport] = useState<string>('Sistema en espera...');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [currentGearConfig, setCurrentGearConfig] = useState<{ numGears: number; arrangement: string } | null>(null);
+  const [echoVial, setEchoVial] = useState<'neutral' | 'mercury' | 'amber'>('neutral');
 
   const [xyParams, setXyParams] = useState({
     x: ParameterType.RESONANCE,
@@ -177,7 +195,11 @@ function App() {
     switch (currentEngine) {
       case 'criosfera': return PARAM_LABELS_CRIOSFERA;
       case 'gearheart': return PARAM_LABELS_GEARHEART;
-      case 'echo-vessel': return PARAM_LABELS_ECHO_VESSEL;
+      case 'echo-vessel':
+        // Dynamic labels based on selected vial
+        if (echoVial === 'mercury') return PARAM_LABELS_ECHO_MERCURY;
+        if (echoVial === 'amber') return PARAM_LABELS_ECHO_AMBER;
+        return PARAM_LABELS_ECHO_NEUTRAL;
       default: return PARAM_LABELS_CRIOSFERA;
     }
   }
@@ -517,6 +539,7 @@ function App() {
                 hasApiKey={!!apiKey}
                 report={titanReport}
                 isAiLoading={isAiLoading}
+                onVialChange={setEchoVial}
               />
             </div>
           )}

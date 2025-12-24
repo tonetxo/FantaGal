@@ -10,9 +10,10 @@ interface EchoVesselUIProps {
     hasApiKey: boolean;
     report: string;
     isAiLoading: boolean;
+    onVialChange?: (vial: 'neutral' | 'mercury' | 'amber') => void;
 }
 
-const EchoVesselUI: React.FC<EchoVesselUIProps> = ({ isActive, engine, aiPrompt, onGenerate, hasApiKey, report, isAiLoading }) => {
+const EchoVesselUI: React.FC<EchoVesselUIProps> = ({ isActive, engine, aiPrompt, onGenerate, hasApiKey, report, isAiLoading, onVialChange }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [micActive, setMicActive] = useState(false);
     const [selectedVial, setSelectedVial] = useState<'neutral' | 'mercury' | 'amber'>('neutral');
@@ -61,6 +62,7 @@ const EchoVesselUI: React.FC<EchoVesselUIProps> = ({ isActive, engine, aiPrompt,
 
         engine.setVial(vial);
         setSelectedVial(vial);
+        onVialChange?.(vial); // Notify parent component
     };
 
     // Gyroscope Effect (Inertia)
@@ -255,10 +257,10 @@ const EchoVesselUI: React.FC<EchoVesselUIProps> = ({ isActive, engine, aiPrompt,
                         onClick={toggleSpeech}
                         disabled={!report}
                         className={`w-16 h-16 rounded-full border-2 flex items-center justify-center transition-all backdrop-blur-sm ${isSpeaking
-                                ? 'border-amber-500 bg-amber-900/30 text-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.4)] animate-pulse'
-                                : report
-                                    ? 'border-cyan-500 bg-cyan-900/30 text-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.2)] hover:bg-cyan-900/50'
-                                    : 'border-slate-800 text-slate-800 opacity-30'
+                            ? 'border-amber-500 bg-amber-900/30 text-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.4)] animate-pulse'
+                            : report
+                                ? 'border-cyan-500 bg-cyan-900/30 text-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.2)] hover:bg-cyan-900/50'
+                                : 'border-slate-800 text-slate-800 opacity-30'
                             }`}
                     >
                         <span className="text-2xl">{isSpeaking ? '⬛' : '🔊'}</span>

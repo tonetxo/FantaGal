@@ -44,7 +44,7 @@ export class CriosferaEngine implements ISynthEngine {
     this.compressor.release.setValueAtTime(0.25, this.ctx.currentTime);
 
     this.masterGain = this.ctx.createGain();
-    this.masterGain.gain.value = 0.5;
+    this.masterGain.gain.value = 0.8;
 
     this.lowPass = this.ctx.createBiquadFilter();
     this.lowPass.type = 'lowpass';

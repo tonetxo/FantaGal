@@ -99,6 +99,35 @@ class SynthManager {
   getCurrentEngineName(): EngineName {
     return this.activeEngineName;
   }
+
+  /**
+   * Reset AudioContext to force Android out of communication mode
+   * This recreates the audio context and re-initializes all engines
+   */
+  async resetAudioContext() {
+    if (!this.ctx) return;
+
+    // Close the old context
+    await this.ctx.close();
+
+    // Create a new context
+    this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+
+    // Re-initialize all existing engines with the new context
+    // We need to clear and recreate them since they hold references to old nodes
+    const oldEngines = Array.from(this.engines.keys());
+    this.engines.clear();
+
+    for (const engineName of oldEngines) {
+      this.getOrCreateEngine(engineName);
+    }
+
+    console.log("AudioContext reset completed");
+  }
+
+  getAudioContext(): AudioContext | null {
+    return this.ctx;
+  }
 }
 
 export const synthManager = new SynthManager();
