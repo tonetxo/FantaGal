@@ -508,11 +508,13 @@ function App() {
           ) : (
             <div className="w-full h-full relative">
               <EchoVesselUI
-                isActive={currentEngine === 'echo-vessel'}
+                isActive={isCurrentEngineActive}
+                engine={isCurrentEngineActive ? synthManager.getEchoVesselEngine() : undefined}
                 aiPrompt={aiPrompt}
                 onGenerate={generateAIPatch}
                 hasApiKey={!!apiKey}
                 report={titanReport}
+                isAiLoading={isAiLoading}
               />
             </div>
           )}

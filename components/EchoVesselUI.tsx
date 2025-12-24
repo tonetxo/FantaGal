@@ -4,15 +4,16 @@ import { EchoVesselEngine } from '../services/engines/EchoVesselEngine';
 
 interface EchoVesselUIProps {
     isActive: boolean;
+    engine: EchoVesselEngine | undefined;
     aiPrompt: string;
     onGenerate: () => void;
     hasApiKey: boolean;
     report: string;
+    isAiLoading: boolean;
 }
 
-const EchoVesselUI: React.FC<EchoVesselUIProps> = ({ isActive, aiPrompt, onGenerate, hasApiKey, report }) => {
+const EchoVesselUI: React.FC<EchoVesselUIProps> = ({ isActive, engine, aiPrompt, onGenerate, hasApiKey, report, isAiLoading }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const [engine, setEngine] = useState<EchoVesselEngine | null>(null);
     const [micActive, setMicActive] = useState(false);
     const [selectedVial, setSelectedVial] = useState<'neutral' | 'mercury' | 'amber'>('neutral');
 
@@ -33,24 +34,23 @@ const EchoVesselUI: React.FC<EchoVesselUIProps> = ({ isActive, aiPrompt, onGener
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    // Init Engine Link
+    // Sync state from engine prop
     useEffect(() => {
-        const eng = synthManager.getEchoVesselEngine();
-        if (eng) {
-            setEngine(eng);
-            setMicActive(eng.getIsMicActive());
+        if (engine && isActive) {
+            setMicActive(engine.getIsMicActive());
         }
-    }, [isActive]);
+    }, [engine, isActive]);
 
     // Handle Mic Toggle
     const toggleMic = async () => {
         if (!engine) return;
+
         if (micActive) {
-            engine.stopMic();
+            engine.setMicEnabled(false);
             setMicActive(false);
         } else {
             await synthManager.resume(); // Ensure AudioContext is running
-            await engine.startMic();
+            await engine.setMicEnabled(true);
             setMicActive(true);
         }
     };
@@ -58,6 +58,7 @@ const EchoVesselUI: React.FC<EchoVesselUIProps> = ({ isActive, aiPrompt, onGener
     // Handle Vial Change
     const selectVial = (vial: 'neutral' | 'mercury' | 'amber') => {
         if (!engine) return;
+
         engine.setVial(vial);
         setSelectedVial(vial);
     };
@@ -201,13 +202,15 @@ const EchoVesselUI: React.FC<EchoVesselUIProps> = ({ isActive, aiPrompt, onGener
 
                     <button
                         onClick={onGenerate}
-                        disabled={!hasApiKey}
-                        className={`w-16 h-16 rounded-full border-2 flex items-center justify-center transition-all ${hasApiKey
-                            ? 'border-cyan-500 bg-cyan-900/30 text-cyan-500 shadow-[0_0_20px_rgba(6,182,212,0.4)]'
-                            : 'border-slate-700 text-slate-700 opacity-50'
+                        disabled={!hasApiKey || isAiLoading}
+                        className={`w-16 h-16 rounded-full border-2 flex items-center justify-center transition-all ${isAiLoading
+                            ? 'border-orange-500 bg-orange-900/40 text-orange-500 animate-pulse'
+                            : hasApiKey
+                                ? 'border-cyan-500 bg-cyan-900/30 text-cyan-500 shadow-[0_0_20px_rgba(6,182,212,0.4)]'
+                                : 'border-slate-700 text-slate-700 opacity-50'
                             }`}
                     >
-                        <span className="text-xl font-bold">AI</span>
+                        <span className="text-xl font-bold">{isAiLoading ? '...' : 'AI'}</span>
                     </button>
                 </div>
 

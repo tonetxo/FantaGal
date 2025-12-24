@@ -88,6 +88,9 @@ export class EchoVesselEngine implements ISynthEngine {
             window.speechSynthesis.onvoiceschanged = () => this.loadVoices();
         }
 
+        // Preload Mic Stream (Eager Init)
+        this.prepareMic();
+
         this.isInitialized = true;
     }
 
@@ -100,44 +103,74 @@ export class EchoVesselEngine implements ISynthEngine {
 
     // --- Microphone Handling ---
 
-    async startMic() {
-        if (this.isMicActive) return;
+    // --- Microphone Handling ---
 
-        // Ensure context is running (vital for Android)
-        await this.resume();
+    private micPreparationPromise: Promise<void> | null = null;
 
-        try {
-            console.log("Requesting Mic Access...");
-            this.micStream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                    echoCancellation: false,
-                    noiseSuppression: false,
-                    autoGainControl: false
-                }
-            });
-            console.log("Mic Access Granted");
+    async prepareMic() {
+        if (this.micStream) return; // Already prepared
 
-            if (this.ctx) {
-                this.micSource = this.ctx.createMediaStreamSource(this.micStream);
-                this.micSource.connect(this.inputGain!);
-                this.isMicActive = true;
+        // If already preparing, wait for that one
+        if (this.micPreparationPromise) {
+            return this.micPreparationPromise;
+        }
+
+        this.micPreparationPromise = (async () => {
+            try {
+                console.log("Requesting Mic Access (Preload)...");
+                this.micStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: false,
+                        noiseSuppression: false,
+                        autoGainControl: false
+                    }
+                });
+                console.log("Mic Access Granted (Preloaded)");
+            } catch (err) {
+                console.error("Error accessing microphone alchemy:", err);
+                // Don't throw here, let the user try again manually if needed
+            } finally {
+                this.micPreparationPromise = null;
             }
-        } catch (err) {
-            console.error("Error accessing microphone alchemy:", err);
-            throw err; // Re-throw to let UI know
+        })();
+
+        return this.micPreparationPromise;
+    }
+
+    async setMicEnabled(enabled: boolean) {
+        if (enabled) {
+            if (!this.micStream) {
+                // Try to prepare if not ready
+                await this.prepareMic();
+            }
+
+            if (!this.micStream || !this.ctx || !this.inputGain) return;
+
+            // Connect if not already connected
+            if (!this.micSource) {
+                this.micSource = this.ctx.createMediaStreamSource(this.micStream);
+                this.micSource.connect(this.inputGain);
+            }
+
+            // Enable tracks
+            this.micStream.getAudioTracks().forEach(track => track.enabled = true);
+            this.isMicActive = true;
+        } else {
+            // Just disable tracks (mute), don't destroy stream
+            if (this.micStream) {
+                this.micStream.getAudioTracks().forEach(track => track.enabled = false);
+            }
+            this.isMicActive = false;
         }
     }
 
+    // Legacy method maintained for compatibility but redirected
+    async startMic() {
+        await this.setMicEnabled(true);
+    }
+
     stopMic() {
-        if (this.micStream) {
-            this.micStream.getTracks().forEach(track => track.stop());
-            this.micStream = null;
-        }
-        if (this.micSource) {
-            this.micSource.disconnect();
-            this.micSource = null;
-        }
-        this.isMicActive = false;
+        this.setMicEnabled(false);
     }
 
     // --- Effects Logic ---
