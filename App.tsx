@@ -109,22 +109,13 @@ const ControlsPanel = ({
       </button>
     </header>
 
-    {!isActive ? (
-      <button
-        onClick={handleStart}
-        className={`w-full py-4 ${theme.accent} border ${theme.border} font-bold rounded-sm transition-all mb-8 bg-white/5 hover:bg-white/10`}
-      >
-        INICIALIZAR NÚCLEO
-      </button>
-    ) : (
-      <div className="flex-1 overflow-y-auto pr-2 scrollbar-thin">
-        <ControlSlider label={labels.pressure} value={state.pressure} onChange={(v) => updateParam(ParameterType.PRESSURE, v)} />
-        <ControlSlider label={labels.resonance} value={state.resonance} onChange={(v) => updateParam(ParameterType.RESONANCE, v)} />
-        <ControlSlider label={labels.viscosity} value={state.viscosity} onChange={(v) => updateParam(ParameterType.VISCOSITY, v)} />
-        <ControlSlider label={labels.turbulence} value={state.turbulence} onChange={(v) => updateParam(ParameterType.TURBULENCE, v)} />
-        <ControlSlider label={labels.diffusion} value={state.diffusion} onChange={(v) => updateParam(ParameterType.DIFFUSION, v)} />
-      </div>
-    )}
+    <div className={`flex-1 overflow-y-auto pr-2 scrollbar-thin ${!isActive ? 'opacity-40 pointer-events-none' : ''}`}>
+      <ControlSlider label={labels.pressure} value={state.pressure} onChange={(v) => updateParam(ParameterType.PRESSURE, v)} />
+      <ControlSlider label={labels.resonance} value={state.resonance} onChange={(v) => updateParam(ParameterType.RESONANCE, v)} />
+      <ControlSlider label={labels.viscosity} value={state.viscosity} onChange={(v) => updateParam(ParameterType.VISCOSITY, v)} />
+      <ControlSlider label={labels.turbulence} value={state.turbulence} onChange={(v) => updateParam(ParameterType.TURBULENCE, v)} />
+      <ControlSlider label={labels.diffusion} value={state.diffusion} onChange={(v) => updateParam(ParameterType.DIFFUSION, v)} />
+    </div>
 
     <div className={`pt-6 border-t ${theme.border} mt-auto`}>
       <div className="text-[10px] uppercase tracking-widest opacity-50 mb-4 font-bold">
@@ -245,6 +236,53 @@ function App() {
     setInitializedEngines(prev => new Set(prev).add(currentEngine));
   };
 
+  const toggleEngine = async () => {
+    if (isCurrentEngineActive) {
+      // Engine-specific cleanup
+      if (currentEngine === 'criosfera') {
+        // Stop all active notes
+        activeNotesRef.current.forEach((id) => {
+          synthManager.stopNote(id);
+        });
+        activeNotesRef.current.clear();
+        setPlayingFrequencies(new Map());
+      } else if (currentEngine === 'gearheart') {
+        // Stop motor and physics loop
+        const gearEngine = synthManager.getGearheartEngine();
+        if (gearEngine) {
+          if (gearEngine.isReady()) {
+            // Force motor off if running
+            const gears = gearEngine.getGears();
+            if (gears[0]?.isConnected) {
+              gearEngine.toggleMotor();
+            }
+          }
+          gearEngine.stopPhysicsLoop();
+        }
+      }
+      // Echo Vessel doesn't need special cleanup (mic is handled separately)
+
+      // Deactivate: remove from initialized set
+      setInitializedEngines(prev => {
+        const next = new Set(prev);
+        next.delete(currentEngine);
+        return next;
+      });
+    } else {
+      // Activate
+      await handleStart();
+
+      // Engine-specific re-initialization after activation
+      if (currentEngine === 'gearheart') {
+        // Restart physics loop since it was stopped
+        const gearEngine = synthManager.getGearheartEngine();
+        if (gearEngine) {
+          gearEngine.startPhysicsLoop();
+        }
+      }
+    }
+  };
+
   const handleEngineChange = (engine: 'criosfera' | 'gearheart' | 'echo-vessel') => {
     setCurrentEngine(engine);
     synthManager.switchEngine(engine);
@@ -258,8 +296,8 @@ function App() {
   };
 
   const toggleNote = (freq: number) => {
+    // If engine not active, do nothing (user must activate via title button)
     if (!isCurrentEngineActive) {
-      handleStart();
       return;
     }
 
@@ -450,9 +488,15 @@ function App() {
       <div className="relative z-10 flex flex-col flex-1 h-full w-full">
 
         <div className="md:hidden absolute top-0 left-0 w-full flex justify-between items-center p-6 pt-16 z-40 pointer-events-none">
-          <div className="pointer-events-auto">
-            <h1 className={`text-xl font-bold tracking-tighter ${theme.accent} uppercase`}>{currentEngine.replace('-', ' ')}</h1>
-          </div>
+          <button
+            onClick={toggleEngine}
+            className="pointer-events-auto flex items-center gap-2 active:scale-95 transition-transform"
+          >
+            <span className={`w-2 h-2 rounded-full ${isCurrentEngineActive ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-gray-600'}`} />
+            <h1 className={`text-xl font-bold tracking-tighter uppercase ${isCurrentEngineActive ? theme.accent : 'opacity-50'}`}>
+              {currentEngine.replace('-', ' ')}
+            </h1>
+          </button>
           <div className="flex gap-2 pointer-events-auto">
             <button
               onClick={() => setIsSettingsOpen(true)}

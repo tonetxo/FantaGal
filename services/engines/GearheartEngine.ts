@@ -208,7 +208,7 @@ export class GearheartEngine implements ISynthEngine {
     this.gears[0].isConnected = this.isMotorActive;
   }
 
-  private startPhysicsLoop() {
+  public startPhysicsLoop() {
     const loop = () => {
       this.updatePhysics();
       this.animationFrameId = requestAnimationFrame(loop);
