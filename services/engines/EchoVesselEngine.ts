@@ -1,6 +1,7 @@
 import { SynthState } from '../../types';
 import { ISynthEngine } from '../BaseSynthEngine';
 import { makeDistortionCurve } from '../audioUtils';
+import { TextToSpeech } from '@capacitor-community/text-to-speech';
 
 type VialType = 'mercury' | 'amber' | 'neutral';
 
@@ -33,20 +34,7 @@ export class EchoVesselEngine implements ISynthEngine {
     // AI Speech Generator
     private speechActive: boolean = false;
     private currentSpeechText: string = "";
-    private synthesisVoice: SpeechSynthesisVoice | null = null;
     private isInitialized: boolean = false;
-
-    constructor() {
-        if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-            // Eager load voices
-            const loadVoices = () => {
-                const voices = window.speechSynthesis.getVoices();
-                this.synthesisVoice = voices.find(v => v.lang.includes('es') || v.lang.includes('gl')) || null;
-            };
-            window.speechSynthesis.onvoiceschanged = loadVoices;
-            loadVoices();
-        }
-    }
 
     async init(ctx: AudioContext) {
         // Prevent double initialization
@@ -94,26 +82,13 @@ export class EchoVesselEngine implements ISynthEngine {
         this.setupMercury();
         this.setupAmber();
 
-        // Init Speech Voice
-        this.loadVoices();
-        if (window.speechSynthesis) {
-            window.speechSynthesis.onvoiceschanged = () => this.loadVoices();
-        }
+
 
         // Preload Mic Stream (Eager Init)
         this.prepareMic();
 
         this.isInitialized = true;
     }
-
-    private loadVoices() {
-        const voices = window.speechSynthesis.getVoices();
-        // Try to find a deep or serious voice, fallback to first available
-        this.synthesisVoice = voices.find(v => v.lang.includes('es') || v.lang.includes('en')) || voices[0] || null;
-        console.log("EchoVessel Voices loaded:", voices.length, this.synthesisVoice?.name);
-    }
-
-    // --- Microphone Handling ---
 
     // --- Microphone Handling ---
 
@@ -303,31 +278,21 @@ export class EchoVesselEngine implements ISynthEngine {
 
 
 
-    public speakOnce() {
+    public async speakOnce() {
         if (!this.currentSpeechText) return;
 
-        // Safety check
-        if (typeof window === 'undefined' || !('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) {
-            return;
-        }
-
         try {
-            // Cancel previous
-            window.speechSynthesis.cancel();
-
-            const utterance = new SpeechSynthesisUtterance(this.currentSpeechText);
-            utterance.lang = 'es-ES'; // Explicit language hint
-
-            if (this.synthesisVoice) utterance.voice = this.synthesisVoice;
-
-            // Safer settings for Android compatibility
-            utterance.pitch = 1.0;
-            utterance.rate = 0.9;
-            utterance.volume = 1.0;
-
-            window.speechSynthesis.speak(utterance);
+            await TextToSpeech.stop();
+            await TextToSpeech.speak({
+                text: this.currentSpeechText,
+                lang: 'es-ES',
+                rate: 1.0,
+                pitch: 1.0,
+                volume: 1.0,
+                category: 'ambient',
+            });
         } catch (e) {
-            console.error("Error speech:", e);
+            console.error("TTS Error:", e);
         }
     }
 
