@@ -56,20 +56,34 @@ const GearSequencer = ({ gearConfig, diffusion = 0.5, onConfigApplied }: GearSeq
 
     const spawnSmoke = (x: number, y: number, amount: number) => {
         for (let i = 0; i < amount; i++) {
-            const angle = Math.random() * Math.PI * 2;
+            const angle = (Math.random() - 0.5) * 0.5; // Narrower cone
             const speed = Math.random() * 0.5 + 0.2;
             particlesRef.current.push({
                 x: x,
                 y: y,
-                vx: Math.cos(angle) * speed,
-                vy: -Math.random() * 2 - 0.5, // Upwards
+                vx: angle,
+                vy: -Math.random() * 1.5 - 0.5,
                 life: 1.0,
                 maxLife: 1.0 + Math.random() * 0.5,
-                size: Math.random() * 5 + 2,
+                size: Math.random() * 8 + 4,
                 type: 'smoke',
-                color: `rgba(200, 200, 200, ${0.1 + (diffusion || 0.5) * 0.2})`
+                color: '200, 200, 200' // Store base color components
             });
         }
+    };
+
+    const spawnOil = (x: number, y: number) => {
+        particlesRef.current.push({
+            x: x,
+            y: y,
+            vx: (Math.random() - 0.5) * 0.5,
+            vy: Math.random() * 1 + 0.5,
+            life: 1.0,
+            maxLife: 2.0,
+            size: Math.random() * 2 + 1,
+            type: 'oil',
+            color: '40, 30, 20' // Dark oil color
+        });
     };
 
     const getGradientColors = (material: string): [string, string, string] => {
@@ -114,11 +128,11 @@ const GearSequencer = ({ gearConfig, diffusion = 0.5, onConfigApplied }: GearSeq
             return;
         }
 
-        // Vibration/Shake from Engine
+        // Vibration/Shake from Engine - Enhanced for impact
         const vibration = engine.vibration;
         if (vibration > 0.1) {
-            const shakeX = (Math.random() - 0.5) * vibration;
-            const shakeY = (Math.random() - 0.5) * vibration;
+            const shakeX = (Math.random() - 0.5) * vibration * 2;
+            const shakeY = (Math.random() - 0.5) * vibration * 2;
             ctx.save();
             ctx.translate(shakeX, shakeY);
         } else {
@@ -151,8 +165,15 @@ const GearSequencer = ({ gearConfig, diffusion = 0.5, onConfigApplied }: GearSeq
                 });
             }
 
-            if (g.isConnected && Math.abs(g.speed) > 0.01 && Math.random() < 0.02) {
-                spawnSmoke(g.x, g.y - g.radius, 1);
+            if (g.isConnected && Math.abs(g.speed) > 0.01) {
+                // Smoke from connection points or top
+                if (Math.random() < 0.01 * (diffusion || 0.5)) {
+                    spawnSmoke(g.x, g.y - g.radius, 1);
+                }
+                // Oil leaks from moving gears - increased frequency
+                if (Math.random() < 0.02) {
+                    spawnOil(g.x + (Math.random() - 0.5) * g.radius, g.y + g.radius * 0.5);
+                }
             }
 
             ctx.save();
@@ -275,7 +296,9 @@ const GearSequencer = ({ gearConfig, diffusion = 0.5, onConfigApplied }: GearSeq
             ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
 
             if (p.type === 'smoke') {
-                ctx.fillStyle = p.color.replace(')', `, ${p.life * 0.4})`);
+                ctx.fillStyle = `rgba(${p.color}, ${p.life * 0.3})`;
+            } else if (p.type === 'oil') {
+                ctx.fillStyle = `rgba(${p.color}, ${p.life * 0.8})`;
             } else {
                 ctx.fillStyle = `rgba(0, 0, 0, ${p.life})`;
             }
