@@ -169,6 +169,48 @@ const EchoVesselUI: React.FC<EchoVesselUIProps> = ({ isActive, engine, aiPrompt,
         return () => cancelAnimationFrame(animationId);
     }, [isActive, engine, selectedVial]);
 
+    // Typewriter & Speech State
+    const [isSpeaking, setIsSpeaking] = useState(false);
+    const [visibleText, setVisibleText] = useState("");
+    const typeWriterRef = useRef<any>(null);
+
+    // Reset visible text when report changes (new prophecy)
+    useEffect(() => {
+        if (report) setVisibleText(report); // Default to full text if not playing, or ready to play
+    }, [report]);
+
+    const toggleSpeech = async () => {
+        if (!engine || !report) return;
+
+        if (isSpeaking) {
+            // STOP
+            if (typeWriterRef.current) clearInterval(typeWriterRef.current);
+            await engine.stopSpeech();
+            setIsSpeaking(false);
+            setVisibleText(report); // Show full text on stop
+        } else {
+            // PLAY
+            setIsSpeaking(true);
+            setVisibleText("");
+
+            // Typewriter Animation
+            let i = 0;
+            const speed = 60; // ms per char
+            typeWriterRef.current = setInterval(() => {
+                setVisibleText(report.substring(0, i + 1));
+                i++;
+                if (i > report.length) clearInterval(typeWriterRef.current);
+            }, speed);
+
+            await engine.speakOnce();
+
+            // Finished
+            if (typeWriterRef.current) clearInterval(typeWriterRef.current);
+            setVisibleText(report);
+            setIsSpeaking(false);
+        }
+    };
+
     return (
         <div className="w-full h-full flex flex-col items-center justify-center relative bg-[#0a0f14] overflow-hidden">
             {/* Main Visualizer */}
@@ -176,18 +218,22 @@ const EchoVesselUI: React.FC<EchoVesselUIProps> = ({ isActive, engine, aiPrompt,
                 ref={canvasRef}
                 width={dimensions.width}
                 height={dimensions.height}
-                className="absolute top-0 left-0 w-full h-full z-0"
+                className="absolute top-0 left-0 w-full h-full z-0 opacity-70"
             />
 
-            {/* Header / Info */}
+            {/* Central Text Display (Typewriter) */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10 px-12">
+                <div className="max-w-xs text-center">
+                    <p className="font-mono text-cyan-400/90 text-sm md:text-base tracking-widest drop-shadow-[0_0_15px_rgba(34,211,238,0.6)] leading-loose uppercase">
+                        {visibleText || (report ? "" : "Esperando Materia...")}
+                        {isSpeaking && <span className="animate-pulse">_</span>}
+                    </p>
+                </div>
+            </div>
+
+            {/* Header / Info - Reduced */}
             <div className="absolute top-4 w-full text-center z-10 pointer-events-none">
-                <h2 className="text-cyan-500 font-mono tracking-[0.5em] text-xs uppercase opacity-80">ECHO VESSEL</h2>
-                <p
-                    onClick={() => engine?.speakOnce()}
-                    className="text-xs text-slate-500 mt-1 font-mono max-w-[80%] mx-auto cursor-pointer pointer-events-auto"
-                >
-                    {report || "Esperando Materia..."}
-                </p>
+                <h2 className="text-cyan-900 font-mono tracking-[0.5em] text-[10px] uppercase opacity-60">ECHO VESSEL</h2>
             </div>
 
             {/* Controls Overlay */}
@@ -199,25 +245,27 @@ const EchoVesselUI: React.FC<EchoVesselUIProps> = ({ isActive, engine, aiPrompt,
                         onClick={toggleMic}
                         className={`w-16 h-16 rounded-full border-2 flex items-center justify-center transition-all ${micActive
                             ? 'border-red-500 bg-red-900/30 text-red-500 shadow-[0_0_20px_rgba(239,68,68,0.4)]'
-                            : 'border-slate-700 text-slate-700'
+                            : 'border-slate-700 text-slate-700 bg-black/40 backdrop-blur-sm'
                             }`}
                     >
                         <span className="material-icons text-2xl">🎤</span>
                     </button>
 
                     <button
-                        onClick={() => engine?.speakOnce()}
+                        onClick={toggleSpeech}
                         disabled={!report}
-                        className={`w-16 h-16 rounded-full border-2 flex items-center justify-center transition-all ${report
-                            ? 'border-cyan-500 bg-cyan-900/30 text-cyan-500 shadow-[0_0_20px_rgba(6,182,212,0.4)]'
-                            : 'border-slate-700 text-slate-700 opacity-50'
-                            } ${isAiLoading ? 'animate-pulse' : ''}`}
+                        className={`w-16 h-16 rounded-full border-2 flex items-center justify-center transition-all backdrop-blur-sm ${isSpeaking
+                                ? 'border-amber-500 bg-amber-900/30 text-amber-500 shadow-[0_0_20px_rgba(245,158,11,0.4)] animate-pulse'
+                                : report
+                                    ? 'border-cyan-500 bg-cyan-900/30 text-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.2)] hover:bg-cyan-900/50'
+                                    : 'border-slate-800 text-slate-800 opacity-30'
+                            }`}
                     >
-                        <span className="text-2xl">🔊</span>
+                        <span className="text-2xl">{isSpeaking ? '⬛' : '🔊'}</span>
                     </button>
                 </div>
 
-                {/* Vial Selectors */}
+                {/* Vial Selectors (unchanged logic, just layout context) */}
                 <div className="flex justify-between items-center bg-black/40 p-2 rounded-full border border-slate-800 backdrop-blur-sm">
                     <button
                         onClick={() => selectVial('mercury')}

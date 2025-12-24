@@ -296,6 +296,14 @@ export class EchoVesselEngine implements ISynthEngine {
         }
     }
 
+    public async stopSpeech() {
+        try {
+            await TextToSpeech.stop();
+        } catch (e) {
+            console.error("TTS Stop Error:", e);
+        }
+    }
+
     // --- Standard Interface Implementation ---
 
     updateParameters(state: SynthState) {
