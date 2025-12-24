@@ -292,20 +292,30 @@ export class EchoVesselEngine implements ISynthEngine {
     public speakOnce() {
         if (!this.currentSpeechText) return; // Speak regardless of speechActive state for one-time calls
 
-        const utterance = new SpeechSynthesisUtterance(this.currentSpeechText);
-        if (this.synthesisVoice) utterance.voice = this.synthesisVoice;
+        // Safety check for Browser/WebView compatibility
+        if (typeof window === 'undefined' || !('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) {
+            console.warn("Speech Synthesis not supported in this environment.");
+            return;
+        }
 
-        // Alchemical Voice Settings
-        utterance.pitch = 0.6; // Deep
-        utterance.rate = 0.8; // Slow and deliberate
-        utterance.volume = 0.6;
+        try {
+            const utterance = new SpeechSynthesisUtterance(this.currentSpeechText);
+            if (this.synthesisVoice) utterance.voice = this.synthesisVoice;
 
-        // When speech ends, don't repeat - just finish
-        utterance.onend = () => {
-            // Speech has ended naturally
-        };
+            // Alchemical Voice Settings
+            utterance.pitch = 0.6; // Deep
+            utterance.rate = 0.8; // Slow and deliberate
+            utterance.volume = 0.6;
 
-        window.speechSynthesis.speak(utterance);
+            // When speech ends, don't repeat - just finish
+            utterance.onend = () => {
+                // Speech has ended naturally
+            };
+
+            window.speechSynthesis.speak(utterance);
+        } catch (e) {
+            console.error("Error initializing speech synthesis:", e);
+        }
     }
 
     // --- Standard Interface Implementation ---

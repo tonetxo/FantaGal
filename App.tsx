@@ -271,13 +271,15 @@ function App() {
     try {
       const condition = await fetchTitanCondition(aiPrompt, apiKey);
 
-      // Use values from AI or fallbacks to prevent crash
+      // Use values from AI or fallbacks, clamped to 0-1
+      const clamp = (v: number) => Math.max(0, Math.min(1, v));
+
       const s = {
-        turbulence: condition.stormLevel ?? 0.5,
-        viscosity: condition.methaneDensity ?? 0.5,
-        pressure: condition.temperature ?? 0.5,
-        resonance: 0.5 + ((condition.stormLevel ?? 0.5) * 0.5),
-        diffusion: 0.3 + ((condition.methaneDensity ?? 0.5) * 0.4)
+        turbulence: clamp(condition.stormLevel ?? 0.5),
+        viscosity: clamp(condition.methaneDensity ?? 0.5),
+        pressure: clamp(condition.temperature ?? 0.5),
+        resonance: clamp(0.5 + ((condition.stormLevel ?? 0.5) * 0.5)),
+        diffusion: clamp(0.3 + ((condition.methaneDensity ?? 0.5) * 0.4))
       };
 
       setState(prev => ({

@@ -16,6 +16,7 @@ export async function fetchTitanCondition(prompt: string, apiKey: string): Promi
         parts: [{
           text: `Analiza a atmosfera de Titán para a seguinte solicitude: "${prompt}".
           Devolve un informe meteorolóxico que dite como se comportarían as tubaxes de resonancia física e os transmutadores vocais.
+          IMPORTANT: Todos os valores numéricos (stormLevel, temperature, methaneDensity) deben estar normalizados entre 0.0 e 1.0.
           A descrición debe estar en galego e ser mística, poética e moi breve (máximo 15 palabras) para ser recitada por un oráculo.`
         }]
       }],
@@ -29,11 +30,11 @@ export async function fetchTitanCondition(prompt: string, apiKey: string): Promi
             methaneDensity: { type: Type.NUMBER },
             description: { type: Type.STRING },
             gearConfig: {
-                type: Type.OBJECT,
-                properties: {
-                    numGears: { type: Type.NUMBER },
-                    arrangement: { type: Type.STRING, enum: ["linear", "cluster", "chaotic"] }
-                }
+              type: Type.OBJECT,
+              properties: {
+                numGears: { type: Type.NUMBER },
+                arrangement: { type: Type.STRING, enum: ["linear", "cluster", "chaotic"] }
+              }
             }
           },
           required: ["stormLevel", "temperature", "methaneDensity", "description"],
@@ -46,8 +47,8 @@ export async function fetchTitanCondition(prompt: string, apiKey: string): Promi
     console.error("Erro detallado de Gemini:", e);
     console.error("Mensaxe de erro:", e.message);
     if (e.response) {
-       console.error("Status:", e.response.status);
-       console.error("Data:", await e.response.text());
+      console.error("Status:", e.response.status);
+      console.error("Data:", await e.response.text());
     }
     return {
       stormLevel: 0.5,
