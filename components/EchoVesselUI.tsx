@@ -239,10 +239,10 @@ const EchoVesselUI: React.FC<EchoVesselUIProps> = ({ isActive, engine, aiPrompt,
             </div>
 
             {/* Controls Overlay */}
-            <div className="absolute bottom-8 w-full max-w-md px-8 z-20 flex flex-col gap-6">
+            <div className="absolute bottom-8 w-full max-w-lg px-4 z-20 flex flex-col gap-6">
 
-                {/* Input Controls */}
-                <div className="flex justify-center gap-8">
+                {/* Input Controls - use full width */}
+                <div className="flex justify-between w-full">
                     <button
                         onClick={toggleMic}
                         className={`w-16 h-16 rounded-full border-2 flex items-center justify-center transition-all ${micActive

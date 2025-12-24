@@ -120,7 +120,7 @@ const ControlsPanel = ({
     <div className={`pt-6 border-t ${theme.border} mt-auto`}>
       <div className="text-[10px] uppercase tracking-widest opacity-50 mb-4 font-bold">
         {currentEngine === 'criosfera' ? 'Xerador de atmósferas' :
-          currentEngine === 'gearheart' ? 'Xerador de Maquinaria (IA)' : 'Xerador de Profecías'}
+          currentEngine === 'gearheart' ? 'Xerador de Maquinaria' : 'Xerador de Profecías'}
       </div>
       <div className="relative">
         <input
@@ -164,11 +164,27 @@ function App() {
   // Helper to check if current engine is initialized
   const isCurrentEngineActive = initializedEngines.has(currentEngine);
 
-  const [aiPrompt, setAiPrompt] = useState('');
+  // Per-engine AI prompts and reports
+  const [aiPrompts, setAiPrompts] = useState<Record<string, string>>({
+    'criosfera': '',
+    'gearheart': '',
+    'echo-vessel': ''
+  });
+  const [titanReports, setTitanReports] = useState<Record<string, string>>({
+    'criosfera': 'Sistema en espera...',
+    'gearheart': 'Sistema en espera...',
+    'echo-vessel': 'Sistema en espera...'
+  });
+
+  // Helpers for current engine
+  const aiPrompt = aiPrompts[currentEngine] || '';
+  const setAiPrompt = (value: string) => setAiPrompts(prev => ({ ...prev, [currentEngine]: value }));
+  const titanReport = titanReports[currentEngine] || '';
+  const setTitanReport = (value: string) => setTitanReports(prev => ({ ...prev, [currentEngine]: value }));
+
   const [apiKey, setApiKey] = useState('');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAiLoading, setIsAiLoading] = useState(false);
-  const [titanReport, setTitanReport] = useState<string>('Sistema en espera...');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [currentGearConfig, setCurrentGearConfig] = useState<{ numGears: number; arrangement: string } | null>(null);
   const [echoVial, setEchoVial] = useState<'neutral' | 'mercury' | 'amber'>('neutral');
@@ -286,9 +302,7 @@ function App() {
   const handleEngineChange = (engine: 'criosfera' | 'gearheart' | 'echo-vessel') => {
     setCurrentEngine(engine);
     synthManager.switchEngine(engine);
-    if (engine === 'criosfera') setTitanReport('Modo sustain activo: alterna as teclas.');
-    else if (engine === 'gearheart') setTitanReport('Matriz de ritmo lista. Arrastra as engrenaxes.');
-    else setTitanReport('Alquimia vocal. Usa os viais e captura a túa voz.');
+    // Reports are now per-engine, no need to overwrite
   };
 
   const updateParam = (param: ParameterType, value: number) => {
@@ -460,7 +474,7 @@ function App() {
         <div className={`md:hidden fixed inset-0 z-50 ${theme.bg} p-8 pt-20 animate-in fade-in slide-in-from-bottom-4 duration-300`}>
           <button
             onClick={() => setIsMobileMenuOpen(false)}
-            className="absolute top-6 right-6 p-2 text-xl opacity-50"
+            className="absolute top-20 right-6 p-2 text-xl opacity-50"
           >
             ✕
           </button>
