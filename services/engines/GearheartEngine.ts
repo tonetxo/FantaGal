@@ -325,7 +325,7 @@ export class GearheartEngine implements ISynthEngine {
 
   private internalTrigger(radius: number, id: number) {
     // Play sound
-    this.playNote(radius);
+    this.playNote(radius, undefined, id);
 
     // Update internal vibration state for UI
     this.vibration += (id === 0 ? 10 : 3);
@@ -352,14 +352,23 @@ export class GearheartEngine implements ISynthEngine {
 
   // --- Audio Methods ---
 
-  playNote(radius: number, velocity?: number): number | undefined {
+  playNote(radius: number, velocity?: number, gearId?: number): number | undefined {
     if (!this.ctx || !this.masterGain) return;
     this.resume();
 
+    // Find the gear to check its material
+    const gear = this.gears.find(g => g.id === gearId);
+
     const isMotor = radius >= 58;
+    const isHiHat = gear?.material === 'platinum';
+    const isBrushSnare = gear?.material === 'gold';
 
     if (isMotor) {
       this.playKickDrum();
+    } else if (isHiHat) {
+      this.playClosedHiHat();
+    } else if (isBrushSnare) {
+      this.playBrushSnare();
     } else {
       const drumFrequency = this.mapRadiusToDrumFrequency(radius);
       this.playTomDrum(drumFrequency);
@@ -368,51 +377,189 @@ export class GearheartEngine implements ISynthEngine {
     return 1;
   }
 
+  private playClosedHiHat() {
+    if (!this.ctx || !this.masterGain) return;
+    const now = this.ctx.currentTime;
+    const duration = 0.05;
+
+    // Use a simpler noise synthesis if possible or a short noise burst
+    const bufferSize = this.ctx.sampleRate * duration;
+    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = Math.random() * 2 - 1;
+    }
+
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = buffer;
+
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'highpass';
+    filter.frequency.setValueAtTime(7000, now);
+    filter.Q.setValueAtTime(1, now);
+
+    const env = this.ctx.createGain();
+    env.gain.setValueAtTime(0.3, now);
+    env.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+    noise.connect(filter);
+    filter.connect(env);
+    env.connect(this.masterGain);
+
+    noise.start(now);
+    noise.stop(now + duration);
+  }
+
+  private playBrushSnare() {
+    if (!this.ctx || !this.masterGain) return;
+    const now = this.ctx.currentTime;
+    const duration = 0.15;
+
+    // Noise component (the "brush" stroke)
+    const bufferSize = this.ctx.sampleRate * duration;
+    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = Math.random() * 2 - 1;
+    }
+
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = buffer;
+
+    const noiseFilter = this.ctx.createBiquadFilter();
+    noiseFilter.type = 'bandpass';
+    noiseFilter.frequency.setValueAtTime(2500, now);
+    noiseFilter.Q.setValueAtTime(1.5, now);
+
+    const noiseEnv = this.ctx.createGain();
+    noiseEnv.gain.setValueAtTime(0, now);
+    noiseEnv.gain.linearRampToValueAtTime(0.1, now + 0.02);
+    noiseEnv.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+    // Body component (tonal part of the snare)
+    const bodyOsc = this.ctx.createOscillator();
+    bodyOsc.type = 'triangle';
+    bodyOsc.frequency.setValueAtTime(180, now);
+    bodyOsc.frequency.exponentialRampToValueAtTime(100, now + 0.1);
+
+    const bodyEnv = this.ctx.createGain();
+    bodyEnv.gain.setValueAtTime(0.1, now);
+    bodyEnv.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+
+    // Connections
+    noise.connect(noiseFilter);
+    noiseFilter.connect(noiseEnv);
+    noiseEnv.connect(this.masterGain);
+
+    bodyOsc.connect(bodyEnv);
+    bodyEnv.connect(this.masterGain);
+
+    noise.start(now);
+    noise.stop(now + duration);
+    bodyOsc.start(now);
+    bodyOsc.stop(now + 0.1);
+  }
+
   private mapRadiusToDrumFrequency(radius: number): number {
-    const minRadius = 25;
+    // Extended musical scale (A1 to A4) alternating between fourths and fifths
+    // A1=55, D2=73.4 (4th), A2=110 (5th), D3=146.8 (4th), A3=220 (5th), D4=293.6 (4th), A4=440 (5th)
+    // Plus intermediate notes to reach 15 steps for better differentiation
+    const notes = [
+      55.00,  // A1
+      65.41,  // C2
+      73.42,  // D2
+      82.41,  // E2
+      98.00,  // G2
+      110.00, // A2 (5th from D2)
+      130.81, // C3
+      146.83, // D3 (4th from A2)
+      164.81, // E3
+      196.00, // G3
+      220.00, // A3 (5th from D3)
+      261.63, // C4
+      293.66, // D4 (4th from A3)
+      329.63, // E4
+      440.00  // A4 (5th from D4 approx)
+    ];
+
+    const minRadius = 20;
     const maxRadius = 60;
-    const minFreq = 60;
-    const maxFreq = 150;
-    const normalized = (radius - minRadius) / (maxRadius - minRadius);
-    const freq = maxFreq - (normalized * (maxFreq - minFreq));
-    return freq;
+
+    // Clamp radius
+    const r = Math.max(minRadius, Math.min(maxRadius, radius));
+
+    // Normalize to 0-1 (inverted so small = high)
+    const normalized = 1 - ((r - minRadius) / (maxRadius - minRadius));
+
+    // Select note based on normalized value with 15 steps
+    const noteIndex = Math.floor(normalized * (notes.length - 1));
+    return notes[Math.min(noteIndex, notes.length - 1)];
   }
 
   private playKickDrum() {
     if (!this.ctx || !this.masterGain) return;
     const now = this.ctx.currentTime;
-    const decay = 0.3 + (this.turbulence * 0.4);
+    const decay = 0.4 + (this.turbulence * 0.3);
 
-    const osc = this.ctx.createOscillator();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(100, now);
-    osc.frequency.exponentialRampToValueAtTime(30, now + 0.1);
+    // Sub-bass oscillator for deep kick
+    const subOsc = this.ctx.createOscillator();
+    subOsc.type = 'sine';
+    subOsc.frequency.setValueAtTime(60, now);
+    subOsc.frequency.exponentialRampToValueAtTime(25, now + 0.15);
 
-    const env = this.ctx.createGain();
-    env.gain.setValueAtTime(0.8, now);
-    env.gain.exponentialRampToValueAtTime(0.001, now + decay);
+    // Click/attack transient
+    const clickOsc = this.ctx.createOscillator();
+    clickOsc.type = 'triangle';
+    clickOsc.frequency.setValueAtTime(150, now);
+    clickOsc.frequency.exponentialRampToValueAtTime(40, now + 0.03);
 
-    osc.connect(env);
-    env.connect(this.masterGain);
+    // Sub envelope
+    const subEnv = this.ctx.createGain();
+    subEnv.gain.setValueAtTime(1.0, now);
+    subEnv.gain.exponentialRampToValueAtTime(0.001, now + decay);
 
-    osc.start(now);
-    osc.stop(now + decay);
+    // Click envelope
+    const clickEnv = this.ctx.createGain();
+    clickEnv.gain.setValueAtTime(0.6, now);
+    clickEnv.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+
+    // Connect
+    subOsc.connect(subEnv);
+    clickOsc.connect(clickEnv);
+    subEnv.connect(this.masterGain);
+    clickEnv.connect(this.masterGain);
+
+    subOsc.start(now);
+    clickOsc.start(now);
+    subOsc.stop(now + decay);
+    clickOsc.stop(now + 0.05);
   }
 
   private playTomDrum(frequency: number) {
     if (!this.ctx || !this.masterGain) return;
     const now = this.ctx.currentTime;
-    const decay = 0.2 + (this.turbulence * 0.3);
 
+    // Longer decay for lower frequencies, shorter for higher
+    const baseDec = frequency < 150 ? 0.4 : 0.25;
+    const decay = baseDec + (this.turbulence * 0.2);
+
+    // Main tone
     const osc = this.ctx.createOscillator();
     osc.type = 'sine';
     osc.frequency.setValueAtTime(frequency, now);
-    osc.frequency.exponentialRampToValueAtTime(frequency * 0.8, now + 0.1);
+    osc.frequency.exponentialRampToValueAtTime(frequency * 0.75, now + 0.1);
 
+    // Dynamic volume: progressively lower for higher frequencies
+    // This provides a natural balance where bass is felt more than treble
+    const freqFactor = Math.max(0, 1 - (frequency / 600));
+    const baseVol = 0.2 + (freqFactor * 0.4); // Ranges from ~0.25 (highs) to 0.6 (lows)
+
+    // Main envelope
     const env = this.ctx.createGain();
-    env.gain.setValueAtTime(0.6, now);
+    env.gain.setValueAtTime(baseVol, now);
     env.gain.exponentialRampToValueAtTime(0.001, now + decay);
 
+    // Connect
     osc.connect(env);
     env.connect(this.masterGain);
 
