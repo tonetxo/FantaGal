@@ -263,7 +263,7 @@ function App() {
         activeNotesRef.current.clear();
         setPlayingFrequencies(new Map());
       } else if (currentEngine === 'gearheart') {
-        // Stop motor and physics loop
+        // Stop motor, physics loop, and reset gears to initial configuration
         const gearEngine = synthManager.getGearheartEngine();
         if (gearEngine) {
           if (gearEngine.isReady()) {
@@ -274,6 +274,7 @@ function App() {
             }
           }
           gearEngine.stopPhysicsLoop();
+          gearEngine.initGears(); // Reset to initial gear configuration
         }
       }
       // Echo Vessel doesn't need special cleanup (mic is handled separately)
@@ -361,10 +362,7 @@ function App() {
         ...s
       }));
 
-      // Only apply gearConfig when in Gearheart mode
-      if (currentEngine === 'gearheart' && condition.gearConfig) {
-        setCurrentGearConfig(condition.gearConfig);
-      }
+      // Gearheart: only sound parameters are affected, gears remain unchanged
 
       const reportText = condition.description || "Transmutación completada.";
       setTitanReport(reportText);
@@ -584,7 +582,6 @@ function App() {
             <div className="w-full h-full relative">
               <GearSequencer
                 diffusion={state.diffusion}
-                gearConfig={currentGearConfig}
               />
             </div>
           ) : (

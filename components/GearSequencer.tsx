@@ -17,9 +17,10 @@ interface Particle {
 interface GearSequencerProps {
     diffusion?: number;
     gearConfig?: { numGears: number; arrangement: string } | null;
+    onConfigApplied?: () => void;
 }
 
-const GearSequencer = ({ gearConfig, diffusion = 0.5 }: GearSequencerProps) => {
+const GearSequencer = ({ gearConfig, diffusion = 0.5, onConfigApplied }: GearSequencerProps) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const particlesRef = useRef<Particle[]>([]);
     const requestRef = useRef<number>(0);
@@ -43,13 +44,15 @@ const GearSequencer = ({ gearConfig, diffusion = 0.5 }: GearSequencerProps) => {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    // Sync Config to Engine
+    // Sync Config to Engine (once, then notify parent to reset)
     useEffect(() => {
         const engine = synthManager.getGearheartEngine();
         if (engine && gearConfig) {
             engine.setGearConfig(gearConfig);
+            // Notify parent to reset the config so it doesn't re-apply
+            onConfigApplied?.();
         }
-    }, [gearConfig]);
+    }, [gearConfig, onConfigApplied]);
 
     const spawnSmoke = (x: number, y: number, amount: number) => {
         for (let i = 0; i < amount; i++) {

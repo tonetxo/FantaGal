@@ -102,7 +102,7 @@ export class GearheartEngine implements ISynthEngine {
 
   // --- Physics Engine ---
 
-  private initGears() {
+  public initGears() {
     // Default initial gears
     const width = typeof window !== 'undefined' ? window.innerWidth : 800;
     const height = typeof window !== 'undefined' ? window.innerHeight * 0.6 : 600;
@@ -124,14 +124,17 @@ export class GearheartEngine implements ISynthEngine {
     const width = window.innerWidth;
     const height = window.innerHeight * 0.6;
     const centerX = width / 2;
-    const centerY = height / 2;
 
-    // Always add Motor first
+    // Motor at bottom center
+    const motorX = centerX;
+    const motorY = height - 100;
+    const motorRadius = 60;
+
     newGears.push({
       id: 0,
-      x: centerX,
-      y: height - 100,
-      radius: 60,
+      x: motorX,
+      y: motorY,
+      radius: motorRadius,
       teeth: 12,
       angle: 0,
       speed: 0.02,
@@ -143,23 +146,35 @@ export class GearheartEngine implements ISynthEngine {
     const count = Math.max(3, Math.min(8, gearConfig.numGears));
     const materials: ('bronze' | 'copper' | 'gold' | 'platinum')[] = ['bronze', 'copper', 'gold', 'platinum'];
 
-    for (let i = 1; i < count; i++) {
-      let x, y, r;
+    // Position gears in a chain - each touching the previous one
+    let lastX = motorX;
+    let lastY = motorY;
+    let lastRadius = motorRadius;
+    let direction = -1; // Start going up
 
+    for (let i = 1; i < count; i++) {
+      const r = 25 + Math.random() * 25;
+      const spacing = lastRadius + r + 5; // Slight overlap for guaranteed connection
+
+      let x, y;
       if (gearConfig.arrangement === 'linear') {
-        x = (width / (count + 1)) * (i + 1);
-        y = centerY;
-        r = 30 + Math.random() * 20;
+        // Horizontal chain from motor
+        x = lastX + spacing * Math.sign(i % 2 === 1 ? 1 : -1) * (Math.ceil(i / 2));
+        y = lastY - spacing * 0.3;
       } else if (gearConfig.arrangement === 'cluster') {
-        const angle = (Math.PI * 2 * i) / count;
-        x = centerX + Math.cos(angle) * 100;
-        y = centerY + Math.sin(angle) * 100;
-        r = 25 + Math.random() * 25;
-      } else { // chaotic
-        x = Math.random() * (width - 100) + 50;
-        y = Math.random() * (height - 100) + 50;
-        r = 20 + Math.random() * 40;
+        // Spiral around motor
+        const angle = (Math.PI * 0.6 * i) - Math.PI / 2;
+        x = motorX + Math.cos(angle) * (spacing * 0.8 * i);
+        y = motorY + Math.sin(angle) * (spacing * 0.8 * i);
+      } else {
+        // Vertical chain going up from motor
+        x = lastX + (Math.random() - 0.5) * 40;
+        y = lastY - spacing * 0.9;
       }
+
+      // Clamp within bounds
+      x = Math.max(r + 10, Math.min(width - r - 10, x));
+      y = Math.max(r + 10, Math.min(height - r - 10, y));
 
       newGears.push({
         id: i,
@@ -170,9 +185,13 @@ export class GearheartEngine implements ISynthEngine {
         angle: 0,
         speed: 0,
         isDragging: false,
-        isConnected: false,
+        isConnected: true,
         material: materials[i % materials.length]
       });
+
+      lastX = x;
+      lastY = y;
+      lastRadius = r;
     }
     this.gears = newGears;
   }
