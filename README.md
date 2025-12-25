@@ -1,20 +1,76 @@
 <div align="center">
 <img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+
+# Criosfera Armónica
+
+*Plataforma de síntese sonora experimental para Android: Onde a física, a crioxenia e a IA converxen.*
 </div>
 
-# Run and deploy your AI Studio app
+---
 
-This contains everything you need to run your app locally.
+## 🌌 Visión do Proxecto
 
-View your app in AI Studio: https://ai.studio/apps/drive/1zZMdX7HKvjdjin2fUiIuGqaJxOEhyLbh
+**Criosfera Armónica** é un sintetizador de modelado físico deseñado para simular as propiedades acústicas de xigantescas tubaxes orgánicas somerxidas baixo os océanos de metano crioxénico de Titán. Combina un motor de audio personalizado con xeración de parámetros impulsada por Intelixencia Artificial (Gemini).
 
-## Run Locally
+A interface e a narrativa do proxecto están integramente localizadas en **galego**, ofrecendo unha experiencia única no ámbito da creación sonora experimental.
 
-**Prerequisites:**  Node.js
+## 🚀 Características Principais
 
+*   **Motor de Modelado Físico:** Simulación de frecuencias de resonancia, presión e viscosidade mediante cadeas complexas de osciladores, filtros de banda pasante e reverb de convolución.
+*   **Integración con Gemini AI:** Tradución de descricións poéticas e atmosféricas (ex: "tormenta de metano pesada") en parámetros técnicos reais do sintetizador.
+*   **UI Atmosférica:** Unha interface de usuario especializada que reflicte o contorno hostil e crioxénico de Titán, con temas dinámicos que se adaptan a cada instrumento.
+*   **Seguridade e Privacidade:** Xestión local e segura de API Keys mediante `@capacitor/preferences`.
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## 🎹 Instrumentos Implementados
+
+### ❄️ Criosfera (Modulador Atmosférico)
+Baseado na resonancia de tubaxes orgánicas subacuáticas. Xera texturas tipo *drone* e "harmónicos pantasma" mediante un pad XY reactivo.
+
+### ⚙️ Gearheart (Matriz de Ritmo)
+Inspirado na maquinaria *steampunk*. O usuario interactúa cun secuenciador baseado na física de engrenaxes, arrastrando pezas metálicas para activar ritmos granulares e industriais.
+
+## 🛠️ Stack Tecnolóxico
+
+*   **Core:** React 19 + TypeScript
+*   **Build Tool:** Vite
+*   **Móbil:** Capacitor 6 (Android)
+*   **Audio:** Web Audio API (Motor multi-instancia `SynthManager`)
+*   **AI:** `@google/genai` (Gemini 1.5 Flash)
+*   **Estilo:** Tailwind CSS
+
+---
+
+## 🏃 Comezo Rápido (Local)
+
+**Requisitos previos:** Node.js instalado.
+
+1.  **Clonar e instalar:**
+    ```bash
+    npm install
+    ```
+2.  **Configurar API Key:**
+    Crea un ficheiro `.env.local` e engade a túa clave de Gemini:
+    ```env
+    GEMINI_API_KEY=o_teu_api_key_aquí
+    ```
+3.  **Executar en modo desenvolvemento:**
+    ```bash
+    npm run dev
+    ```
+
+## 📱 Compilación para Android
+
+Este proxecto utiliza Capacitor para a súa versión móbil.
+
+```bash
+# Sincronizar cambios co proxecto Android
+npx cap sync
+# Abrir en Android Studio
+npx cap open android
+```
+
+---
+
+<div align="center">
+Desenvolvido con ❤️ en Galicia.
+</div>
