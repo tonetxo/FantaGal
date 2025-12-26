@@ -68,12 +68,12 @@ const BubbleXYPad: React.FC<BubbleXYPadProps> = ({ xValue, yValue, xLabel, yLabe
 
   return (
     <div className="flex flex-col items-center w-full max-w-[320px] mx-auto select-none touch-none">
-      <div className="flex justify-between w-full text-[10px] text-stone-500 mb-1 tracking-widest uppercase font-mono">
+      <div className="flex justify-between w-full text-[10px] text-orange-500 mb-1 tracking-widest uppercase font-mono">
         <span>Y: {yLabel}</span>
         <span>X: {xLabel}</span>
       </div>
-      
-      <div 
+
+      <div
         ref={containerRef}
         className="relative w-full aspect-square bg-stone-900/30 border border-stone-800/50 rounded-xl overflow-hidden backdrop-blur-sm shadow-inner group cursor-crosshair touch-none"
         onTouchStart={onTouchStart}
@@ -82,8 +82,8 @@ const BubbleXYPad: React.FC<BubbleXYPadProps> = ({ xValue, yValue, xLabel, yLabe
         onMouseMove={onMouseMove}
       >
         {/* Grid lines */}
-        <div className="absolute inset-0 opacity-10 pointer-events-none" 
-             style={{ backgroundImage: 'linear-gradient(#444 1px, transparent 1px), linear-gradient(90deg, #444 1px, transparent 1px)', backgroundSize: '20% 20%' }}>
+        <div className="absolute inset-0 opacity-10 pointer-events-none"
+          style={{ backgroundImage: 'linear-gradient(#444 1px, transparent 1px), linear-gradient(90deg, #444 1px, transparent 1px)', backgroundSize: '20% 20%' }}>
         </div>
 
         {/* Axis Labels inside */}
@@ -91,7 +91,7 @@ const BubbleXYPad: React.FC<BubbleXYPadProps> = ({ xValue, yValue, xLabel, yLabe
         <div className="absolute bottom-2 left-2 text-[9px] text-orange-500/20 pointer-events-none font-bold">0.0</div>
 
         {/* The Latent Bubble */}
-        <div 
+        <div
           className="absolute w-20 h-20 -ml-10 -mt-10 rounded-full pointer-events-none transition-transform duration-75 ease-out"
           style={{ left, top }}
         >
@@ -101,13 +101,13 @@ const BubbleXYPad: React.FC<BubbleXYPadProps> = ({ xValue, yValue, xLabel, yLabe
           <div className="absolute inset-4 bg-orange-400/40 rounded-full blur-md" />
           {/* Center Point */}
           <div className="absolute inset-[38%] bg-orange-100/80 rounded-full blur-[1px] shadow-[0_0_15px_rgba(249,115,22,0.8)]" />
-          
+
           {/* Ripple effect when dragging */}
           {isDragging && (
-             <div className="absolute inset-[-50%] border border-orange-500/20 rounded-full animate-ping opacity-20" />
+            <div className="absolute inset-[-50%] border border-orange-500/20 rounded-full animate-ping opacity-20" />
           )}
         </div>
-        
+
         {/* Crosshair lines */}
         <div className="absolute top-0 bottom-0 w-[1px] bg-orange-500/10 pointer-events-none" style={{ left }} />
         <div className="absolute left-0 right-0 h-[1px] bg-orange-500/10 pointer-events-none" style={{ top }} />
