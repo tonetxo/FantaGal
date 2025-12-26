@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { synthManager } from '../services/SynthManager';
 import { EchoVesselEngine } from '../services/engines/EchoVesselEngine';
+import { useCanvasDimensions } from '../hooks/useCanvasDimensions';
 
 interface EchoVesselUIProps {
     isActive: boolean;
@@ -18,22 +19,8 @@ const EchoVesselUI: React.FC<EchoVesselUIProps> = ({ isActive, engine, aiPrompt,
     const [micActive, setMicActive] = useState(false);
     const [selectedVial, setSelectedVial] = useState<'neutral' | 'mercury' | 'amber'>('neutral');
 
-    // Canvas dimensions with resize handling
-    const [dimensions, setDimensions] = useState({
-        width: typeof window !== 'undefined' ? window.innerWidth : 800,
-        height: typeof window !== 'undefined' ? window.innerHeight * 0.6 : 480
-    });
-
-    useEffect(() => {
-        const handleResize = () => {
-            setDimensions({
-                width: window.innerWidth,
-                height: window.innerHeight * 0.6
-            });
-        };
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, []);
+    // Canvas dimensions with resize handling (using shared hook)
+    const dimensions = useCanvasDimensions(0.6);
 
     // Sync state from engine prop
     useEffect(() => {

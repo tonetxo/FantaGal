@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { synthManager } from '../services/SynthManager';
 import { Gear } from '../services/engines/GearheartEngine';
+import { useCanvasDimensions } from '../hooks/useCanvasDimensions';
 
 interface Particle {
     x: number;
@@ -28,22 +29,8 @@ const GearSequencer = ({ gearConfig, diffusion = 0.5, onConfigApplied, isActive 
     const dragInfo = useRef<{ id: number, offsetX: number, offsetY: number } | null>(null);
     const hasStartedAudio = useRef(false);
 
-    // Canvas dimensions with resize handling
-    const [dimensions, setDimensions] = useState({
-        width: typeof window !== 'undefined' ? window.innerWidth : 800,
-        height: typeof window !== 'undefined' ? window.innerHeight * 0.6 : 480
-    });
-
-    useEffect(() => {
-        const handleResize = () => {
-            setDimensions({
-                width: window.innerWidth,
-                height: window.innerHeight * 0.6
-            });
-        };
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, []);
+    // Canvas dimensions with resize handling (using shared hook)
+    const dimensions = useCanvasDimensions(0.6);
 
     // Sync Config to Engine (once, then notify parent to reset)
     useEffect(() => {
@@ -393,11 +380,6 @@ const GearSequencer = ({ gearConfig, diffusion = 0.5, onConfigApplied, isActive 
 
     const handleStart = (e: React.MouseEvent | React.TouchEvent) => {
         if (!isActive) return;
-
-        // Prevent default on touch to avoid ghost mouse events
-        if ('touches' in e && e.cancelable) {
-            // e.preventDefault(); 
-        }
 
         if (!hasStartedAudio.current) {
             synthManager.resume();

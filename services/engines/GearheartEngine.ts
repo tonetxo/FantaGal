@@ -1,7 +1,7 @@
 
 import { SynthState } from '../../types';
 import { ISynthEngine } from '../BaseSynthEngine';
-import { makeSoftDistortionCurve, createReverbImpulse } from '../audioUtils';
+import { makeSoftDistortionCurve, createReverbImpulse, createNoiseBuffer } from '../audioUtils';
 
 export interface Gear {
   id: number;
@@ -408,13 +408,8 @@ export class GearheartEngine implements ISynthEngine {
     const now = this.ctx.currentTime;
     const duration = 0.05;
 
-    // Use a simpler noise synthesis if possible or a short noise burst
-    const bufferSize = this.ctx.sampleRate * duration;
-    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      data[i] = Math.random() * 2 - 1;
-    }
+    // Use shared noise buffer utility
+    const buffer = createNoiseBuffer(this.ctx, duration);
 
     const noise = this.ctx.createBufferSource();
     noise.buffer = buffer;
@@ -441,13 +436,8 @@ export class GearheartEngine implements ISynthEngine {
     const now = this.ctx.currentTime;
     const duration = 0.15;
 
-    // Noise component (the "brush" stroke)
-    const bufferSize = this.ctx.sampleRate * duration;
-    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      data[i] = Math.random() * 2 - 1;
-    }
+    // Noise component (the "brush" stroke) - using shared utility
+    const buffer = createNoiseBuffer(this.ctx, duration);
 
     const noise = this.ctx.createBufferSource();
     noise.buffer = buffer;
