@@ -32,21 +32,26 @@ const Visualizer: React.FC<VisualizerProps> = ({ turbulence, viscosity, pressure
 
     const render = () => {
       time += 0.01 * (1 + turbulence * 5);
-      
-      canvas.width = canvas.offsetWidth;
-      canvas.height = canvas.offsetHeight;
+
+      // Only resize if dimensions actually changed (avoids resetting context every frame)
+      const newWidth = canvas.offsetWidth;
+      const newHeight = canvas.offsetHeight;
+      if (canvas.width !== newWidth || canvas.height !== newHeight) {
+        canvas.width = newWidth;
+        canvas.height = newHeight;
+      }
 
       // Draw background gradient
       const gradient = ctx.createRadialGradient(
         canvas.width / 2, canvas.height / 2, 0,
         canvas.width / 2, canvas.height / 2, canvas.width
       );
-      
+
       // Orange/Gold Titan hues
       const hue = 30 + (pressure * 20);
       gradient.addColorStop(0, `hsla(${hue}, 80%, 40%, 0.4)`);
       gradient.addColorStop(1, `hsla(${hue - 10}, 100%, 5%, 0.8)`);
-      
+
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 

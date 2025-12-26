@@ -3,6 +3,17 @@ import { SynthState } from '../../types';
 import { ISynthEngine } from '../BaseSynthEngine';
 import { makeSoftDistortionCurve, createReverbImpulse, createNoiseBuffer } from '../audioUtils';
 
+// Physics constants
+const GEAR_CONNECTION_MARGIN_PX = 18;        // Margin for gear connection detection
+const MAX_PROPAGATION_ITERATIONS = 30;       // Max iterations for energy propagation
+const DISCONNECTED_GEAR_DEPTH = 999;         // Depth value for disconnected gears
+
+// Audio constants
+const KICK_BASE_DECAY = 0.4;                 // Base decay time for kick drum
+const KICK_START_FREQUENCY_HZ = 55;          // Starting frequency for kick sub-bass
+const KICK_END_FREQUENCY_HZ = 30;            // Ending frequency for kick sub-bass
+const MOTOR_BASE_SPEED = 0.02;               // Base rotation speed for the motor gear
+
 export interface Gear {
   id: number;
   x: number;
@@ -277,7 +288,7 @@ export class GearheartEngine implements ISynthEngine {
 
     // Update Motor
     gears[0].isConnected = this.isMotorActive;
-    gears[0].speed = this.isMotorActive ? 0.02 * this.speedMultiplier : 0;
+    gears[0].speed = this.isMotorActive ? MOTOR_BASE_SPEED * this.speedMultiplier : 0;
     gears[0].depth = 0; // Motor is always root
 
     // Reset non-motors/non-connected
@@ -285,11 +296,11 @@ export class GearheartEngine implements ISynthEngine {
       if (gears[i].isDragging) {
         gears[i].isConnected = false;
         gears[i].speed = 0;
-        gears[i].depth = 999;
+        gears[i].depth = DISCONNECTED_GEAR_DEPTH;
       } else {
         gears[i].isConnected = false;
         gears[i].speed = 0;
-        gears[i].depth = 999;
+        gears[i].depth = DISCONNECTED_GEAR_DEPTH;
       }
     }
 
@@ -297,7 +308,7 @@ export class GearheartEngine implements ISynthEngine {
     let changed = true;
     let iterations = 0;
     // Increase iterations to ensure propatagion in complex chains
-    while (changed && iterations < 30) {
+    while (changed && iterations < MAX_PROPAGATION_ITERATIONS) {
       changed = false;
       iterations++;
 
@@ -313,7 +324,7 @@ export class GearheartEngine implements ISynthEngine {
           const dy = gears[i].y - gears[j].y;
           const dist = Math.sqrt(dx * dx + dy * dy);
           const combinedRadius = gears[i].radius + gears[j].radius;
-          const margin = 18; // Increased margin for easier connection
+          const margin = GEAR_CONNECTION_MARGIN_PX;
 
           if (dist < combinedRadius + margin) {
             gears[j].isConnected = true;
@@ -515,13 +526,13 @@ export class GearheartEngine implements ISynthEngine {
   private playKickDrum() {
     if (!this.ctx || !this.masterGain) return;
     const now = this.ctx.currentTime;
-    const decay = 0.4 + (this.turbulence * 0.3);
+    const decay = KICK_BASE_DECAY + (this.turbulence * 0.3);
 
     // Sub-bass oscillator for deep kick - Deeper and Louder
     const subOsc = this.ctx.createOscillator();
     subOsc.type = 'sine';
-    subOsc.frequency.setValueAtTime(55, now); // Lower start frequency for deeper thud
-    subOsc.frequency.exponentialRampToValueAtTime(30, now + 0.15);
+    subOsc.frequency.setValueAtTime(KICK_START_FREQUENCY_HZ, now);
+    subOsc.frequency.exponentialRampToValueAtTime(KICK_END_FREQUENCY_HZ, now + 0.15);
 
     // Click/attack transient - Punchier
     const clickOsc = this.ctx.createOscillator();
