@@ -368,10 +368,18 @@ export class GearheartEngine extends AbstractSynthEngine {
     this.speedMultiplier = 0.5 + (state.viscosity * 1.5); // Viscosity controls Global Speed
     this.turbulence = state.turbulence;
 
-    // Existing Audio Params
+    // Audio Params - significantly boosted for noticeable effect
     const t = this.ctx.currentTime;
-    this.percussionFilter.Q.setTargetAtTime(1 + (state.resonance * 10), t, 0.1);
-    this.masterGain.gain.setTargetAtTime(0.15 + (state.pressure * 0.25), t, 0.1);
+
+    // Pressure (Rozamento/Complejidad): affects volume and filter dramatically
+    // Volume range: 0.25 - 0.8 (wider range)
+    this.masterGain.gain.setTargetAtTime(0.25 + (state.pressure * 0.55), t, 0.1);
+    // Filter cutoff: 400 - 6000 Hz (starts darker, opens up more)
+    this.percussionFilter.frequency.setTargetAtTime(400 + (state.pressure * 5600), t, 0.1);
+
+    // Resonance: Q range 0.7 - 12 (reduced from 20 to avoid extreme kick variations)
+    this.percussionFilter.Q.setTargetAtTime(0.7 + (state.resonance * 11.3), t, 0.1);
+
     if (this.reverbGain) {
       this.reverbGain.gain.setTargetAtTime(state.diffusion * 1.5, t, 0.1);
     }
@@ -429,7 +437,9 @@ export class GearheartEngine extends AbstractSynthEngine {
     filter.Q.setValueAtTime(1, now);
 
     const env = this.ctx.createGain();
-    env.gain.setValueAtTime(0.3 * volume, now);
+    // Start from 0 and ramp up to avoid click
+    env.gain.setValueAtTime(0, now);
+    env.gain.linearRampToValueAtTime(0.3 * volume, now + 0.003);
     env.gain.exponentialRampToValueAtTime(0.001, now + duration);
 
     noise.connect(filter);
@@ -468,7 +478,8 @@ export class GearheartEngine extends AbstractSynthEngine {
     bodyOsc.frequency.exponentialRampToValueAtTime(100, now + 0.1);
 
     const bodyEnv = this.ctx.createGain();
-    bodyEnv.gain.setValueAtTime(0.1 * volume, now);
+    bodyEnv.gain.setValueAtTime(0, now);
+    bodyEnv.gain.linearRampToValueAtTime(0.1 * volume, now + 0.003); // Rampa anti-clic
     bodyEnv.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
 
     // Connections
@@ -526,29 +537,31 @@ export class GearheartEngine extends AbstractSynthEngine {
     const now = this.ctx.currentTime;
     const decay = KICK_BASE_DECAY + (this.turbulence * 0.3);
 
-    // Sub-bass oscillator for deep kick - Deeper and Louder
+    // Sub-bass oscillator for deep kick
     const subOsc = this.ctx.createOscillator();
     subOsc.type = 'sine';
     subOsc.frequency.setValueAtTime(KICK_START_FREQUENCY_HZ, now);
     subOsc.frequency.exponentialRampToValueAtTime(KICK_END_FREQUENCY_HZ, now + 0.15);
 
-    // Click/attack transient - Punchier
+    // Click/attack transient
     const clickOsc = this.ctx.createOscillator();
     clickOsc.type = 'triangle';
     clickOsc.frequency.setValueAtTime(150, now);
     clickOsc.frequency.exponentialRampToValueAtTime(40, now + 0.03);
 
-    // Sub envelope
+    // Sub envelope - with ramp to avoid click
     const subEnv = this.ctx.createGain();
-    subEnv.gain.setValueAtTime(1.5, now); // Boosted gain (was 1.0)
+    subEnv.gain.setValueAtTime(0, now);
+    subEnv.gain.linearRampToValueAtTime(1.0, now + 0.003);
     subEnv.gain.exponentialRampToValueAtTime(0.001, now + decay);
 
-    // Click envelope
+    // Click envelope - with ramp to avoid click
     const clickEnv = this.ctx.createGain();
-    clickEnv.gain.setValueAtTime(0.8, now); // Boosted click (was 0.6)
+    clickEnv.gain.setValueAtTime(0, now);
+    clickEnv.gain.linearRampToValueAtTime(0.6, now + 0.002);
     clickEnv.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
 
-    // Connect
+    // Connect through masterGain (original routing)
     subOsc.connect(subEnv);
     clickOsc.connect(clickEnv);
     subEnv.connect(this.masterGain);
@@ -583,9 +596,10 @@ export class GearheartEngine extends AbstractSynthEngine {
     const freqFactor = Math.max(0, 1 - (frequency / 500));
     const baseVol = 0.1 + (freqFactor * 0.5); // Ranges from ~0.1 (highs) to 0.6 (lows)
 
-    // Main envelope
+    // Main envelope - start from 0 to avoid click
     const env = ctx.createGain();
-    env.gain.setValueAtTime(baseVol * volume, now);
+    env.gain.setValueAtTime(0, now);
+    env.gain.linearRampToValueAtTime(baseVol * volume, now + 0.003); // 3ms ramp
     env.gain.exponentialRampToValueAtTime(0.001, now + decay);
 
     // Connect

@@ -108,13 +108,14 @@ export class CriosferaEngine extends AbstractSynthEngine {
     masterGain.gain.setTargetAtTime(targetGain, ctx.currentTime, timeConstant);
 
     if (this.lfo && this.lfoFilterGain && this.lfoDelayGain) {
-      const lfoSpeed = 0.1 + Math.pow(state.turbulence, 2) * 25;
+      // Turbulence controls LFO - softened curve for less aggressive modulation
+      const lfoSpeed = 0.1 + state.turbulence * 8; // Was pow(t,2)*25, now linear 0.1-8.1 Hz
       this.lfo.frequency.setTargetAtTime(lfoSpeed, ctx.currentTime, timeConstant);
 
-      const filterDepth = 50 + Math.pow(state.turbulence, 2) * 3000;
+      const filterDepth = 50 + state.turbulence * 1200; // Was pow(t,2)*3000, now linear 50-1250 Hz
       this.lfoFilterGain.gain.setTargetAtTime(filterDepth, ctx.currentTime, timeConstant);
 
-      const delayModDepth = state.turbulence * 0.02;
+      const delayModDepth = state.turbulence * 0.015; // Slightly reduced
       this.lfoDelayGain.gain.setTargetAtTime(delayModDepth, ctx.currentTime, timeConstant);
     }
 
@@ -172,17 +173,18 @@ export class CriosferaEngine extends AbstractSynthEngine {
     gain.gain.linearRampToValueAtTime(velocity * 0.6, t + 0.02);
 
     // Start oscillator gains at 0 and ramp up to avoid clicks
+    // Less tonal: oscillators reduced, noise boosted for atmospheric sound
     const osc1Gain = ctx.createGain();
     osc1Gain.gain.setValueAtTime(0, t);
-    osc1Gain.gain.linearRampToValueAtTime(0.15, t + 0.01);
+    osc1Gain.gain.linearRampToValueAtTime(0.08, t + 0.01); // Reduced for less fundamental
 
     const osc2Gain = ctx.createGain();
     osc2Gain.gain.setValueAtTime(0, t);
-    osc2Gain.gain.linearRampToValueAtTime(0.1, t + 0.01);
+    osc2Gain.gain.linearRampToValueAtTime(0.06, t + 0.01); // Reduced for less definition
 
     const noiseGain = ctx.createGain();
     noiseGain.gain.setValueAtTime(0, t);
-    noiseGain.gain.linearRampToValueAtTime(0.6, t + 0.01);
+    noiseGain.gain.linearRampToValueAtTime(0.7, t + 0.01); // Boosted for more texture
 
     osc1.connect(toneHighPass);
     osc2.connect(toneHighPass);
