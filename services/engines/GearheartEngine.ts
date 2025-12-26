@@ -433,7 +433,7 @@ export class GearheartEngine extends AbstractSynthEngine {
 
     const filter = this.ctx.createBiquadFilter();
     filter.type = 'highpass';
-    filter.frequency.setValueAtTime(7000, now);
+    filter.frequency.setValueAtTime(10000, now); // Subido de 7000 a 10000 para hacerlo más agudo
     filter.Q.setValueAtTime(1, now);
 
     const env = this.ctx.createGain();
@@ -468,32 +468,38 @@ export class GearheartEngine extends AbstractSynthEngine {
 
     const noiseEnv = this.ctx.createGain();
     noiseEnv.gain.setValueAtTime(0, now);
-    noiseEnv.gain.linearRampToValueAtTime(0.1 * volume, now + 0.02);
+    noiseEnv.gain.linearRampToValueAtTime(0.04 * volume, now + 0.02); // Bajado de 0.07 a 0.04
     noiseEnv.gain.exponentialRampToValueAtTime(0.001, now + duration);
 
-    // Body component (tonal part of the snare)
+    // Body component (tonal part of the snare) - Shortened to a snap
     const bodyOsc = this.ctx.createOscillator();
     bodyOsc.type = 'triangle';
-    bodyOsc.frequency.setValueAtTime(180, now);
-    bodyOsc.frequency.exponentialRampToValueAtTime(100, now + 0.1);
+    bodyOsc.frequency.setValueAtTime(250, now);
+    bodyOsc.frequency.exponentialRampToValueAtTime(220, now + 0.05); // Faster drop, higher end frequency
 
     const bodyEnv = this.ctx.createGain();
     bodyEnv.gain.setValueAtTime(0, now);
-    bodyEnv.gain.linearRampToValueAtTime(0.1 * volume, now + 0.003); // Rampa anti-clic
-    bodyEnv.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+    bodyEnv.gain.linearRampToValueAtTime(0.03 * volume, now + 0.003); // Bajado de 0.07 a 0.03
+    bodyEnv.gain.exponentialRampToValueAtTime(0.001, now + 0.05); // Shortened duration to 0.05s
+
+    // High pass filter to ensure no unwanted low frequency remains
+    const bodyHighPass = this.ctx.createBiquadFilter();
+    bodyHighPass.type = 'highpass';
+    bodyHighPass.frequency.setValueAtTime(200, now);
 
     // Connections
     noise.connect(noiseFilter);
     noiseFilter.connect(noiseEnv);
     noiseEnv.connect(this.masterGain);
 
-    bodyOsc.connect(bodyEnv);
+    bodyOsc.connect(bodyHighPass);
+    bodyHighPass.connect(bodyEnv);
     bodyEnv.connect(this.masterGain);
 
     noise.start(now);
     noise.stop(now + duration);
     bodyOsc.start(now);
-    bodyOsc.stop(now + 0.1);
+    bodyOsc.stop(now + 0.05); // Shortened to 0.05s
   }
 
   private mapRadiusToDrumFrequency(radius: number): number {
