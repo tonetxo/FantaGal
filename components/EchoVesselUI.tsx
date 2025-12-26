@@ -174,7 +174,7 @@ const EchoVesselUI: React.FC<EchoVesselUIProps> = ({ isActive, engine, aiPrompt,
     // Typewriter & Speech State
     const [isSpeaking, setIsSpeaking] = useState(false);
     const [visibleText, setVisibleText] = useState("");
-    const typeWriterRef = useRef<any>(null);
+    const typeWriterRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     // Reset visible text when report changes (new prophecy)
     useEffect(() => {

@@ -48,7 +48,17 @@ export async function fetchTitanCondition(prompt: string, apiKey: string): Promi
     console.error("Mensaxe de erro:", e.message);
     if (e.response) {
       console.error("Status:", e.response.status);
-      console.error("Data:", await e.response.text());
+      // Verificar que e.response.text sea una función antes de invocarlo
+      if (typeof e.response.text === 'function') {
+        try {
+          const responseText = await e.response.text();
+          console.error("Data:", responseText);
+        } catch (textError) {
+          console.error("Non se puido ler o corpo da resposta:", textError);
+        }
+      } else if (e.response.data) {
+        console.error("Data:", e.response.data);
+      }
     }
     return {
       stormLevel: 0.5,

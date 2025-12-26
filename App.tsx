@@ -60,9 +60,16 @@ const PARAM_LABELS_ECHO_AMBER: Record<string, string> = {
   diffusion: "ESPACIALIDADE"
 };
 
+interface Theme {
+  bg: string;
+  text: string;
+  accent: string;
+  border: string;
+}
+
 interface ControlsPanelProps {
   currentEngine: 'criosfera' | 'gearheart' | 'echo-vessel';
-  theme: any;
+  theme: Theme;
   state: SynthState;
   isActive: boolean;
   handleStart: () => void;
@@ -153,13 +160,30 @@ function App() {
   // Track which engines have been initialized (per-engine, not global)
   const [initializedEngines, setInitializedEngines] = useState<Set<string>>(new Set());
 
-  const [state, setState] = useState<SynthState>({
+  // Default synth state
+  const defaultSynthState: SynthState = {
     pressure: 0.7,
     resonance: 0.6,
     viscosity: 0.3,
     turbulence: 0.2,
     diffusion: 0.4,
+  };
+
+  // Per-engine states (each engine has independent parameters)
+  const [engineStates, setEngineStates] = useState<Record<string, SynthState>>({
+    'criosfera': { ...defaultSynthState },
+    'gearheart': { ...defaultSynthState },
+    'echo-vessel': { ...defaultSynthState }
   });
+
+  // Current engine state helper
+  const state = engineStates[currentEngine] || defaultSynthState;
+  const setState = (updater: SynthState | ((prev: SynthState) => SynthState)) => {
+    setEngineStates(prev => ({
+      ...prev,
+      [currentEngine]: typeof updater === 'function' ? updater(prev[currentEngine]) : updater
+    }));
+  };
 
   // Helper to check if current engine is initialized
   const isCurrentEngineActive = initializedEngines.has(currentEngine);
@@ -186,7 +210,6 @@ function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [currentGearConfig, setCurrentGearConfig] = useState<{ numGears: number; arrangement: string } | null>(null);
   const [echoVial, setEchoVial] = useState<'neutral' | 'mercury' | 'amber'>('neutral');
 
   const [xyParams, setXyParams] = useState({
