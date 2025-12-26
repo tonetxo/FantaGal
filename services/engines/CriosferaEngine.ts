@@ -166,16 +166,21 @@ export class CriosferaEngine implements ISynthEngine {
 
     const gain = this.ctx.createGain();
     gain.gain.setValueAtTime(0, t);
-    gain.gain.setTargetAtTime(velocity * 0.6, t, 0.5);
+    // Faster attack to avoid slow fade-in, but still smooth
+    gain.gain.linearRampToValueAtTime(velocity * 0.6, t + 0.02);
 
+    // Start oscillator gains at 0 and ramp up to avoid clicks
     const osc1Gain = this.ctx.createGain();
-    osc1Gain.gain.value = 0.15;
+    osc1Gain.gain.setValueAtTime(0, t);
+    osc1Gain.gain.linearRampToValueAtTime(0.15, t + 0.01);
 
     const osc2Gain = this.ctx.createGain();
-    osc2Gain.gain.value = 0.1;
+    osc2Gain.gain.setValueAtTime(0, t);
+    osc2Gain.gain.linearRampToValueAtTime(0.1, t + 0.01);
 
     const noiseGain = this.ctx.createGain();
-    noiseGain.gain.value = 0.6;
+    noiseGain.gain.setValueAtTime(0, t);
+    noiseGain.gain.linearRampToValueAtTime(0.6, t + 0.01);
 
     osc1.connect(toneHighPass);
     osc2.connect(toneHighPass);
@@ -204,11 +209,17 @@ export class CriosferaEngine implements ISynthEngine {
       const releaseTime = 1.0 + (this.currentState ? this.currentState.viscosity * 3 : 0);
 
       const t = this.ctx.currentTime;
-      note.gain.gain.cancelScheduledValues(t);
-      note.gain.gain.setTargetAtTime(0, t, releaseTime * 0.2);
 
+      // Get current value first, then cancel, then set from current value to avoid clicks
+      const currentGain = note.gain.gain.value;
+      note.gain.gain.cancelScheduledValues(t);
+      note.gain.gain.setValueAtTime(currentGain, t);
+      note.gain.gain.linearRampToValueAtTime(0, t + releaseTime * 0.3);
+
+      const currentFreq = note.filter.frequency.value;
       note.filter.frequency.cancelScheduledValues(t);
-      note.filter.frequency.setTargetAtTime(50, t, releaseTime * 0.2);
+      note.filter.frequency.setValueAtTime(currentFreq, t);
+      note.filter.frequency.linearRampToValueAtTime(50, t + releaseTime * 0.3);
 
       setTimeout(() => {
         if (this.oscillators.has(id)) {
