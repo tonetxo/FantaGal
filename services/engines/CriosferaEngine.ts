@@ -1,12 +1,13 @@
 
 import { SynthState } from '../../types';
-import { ISynthEngine } from '../BaseSynthEngine';
+import { AbstractSynthEngine } from '../AbstractSynthEngine';
 import { makeDistortionCurve, createReverbImpulse, createNoiseBuffer } from '../audioUtils';
 
-export class CriosferaEngine implements ISynthEngine {
-  private ctx: AudioContext | null = null;
-  private masterGain: GainNode | null = null;
-  private compressor: DynamicsCompressorNode | null = null;
+/**
+ * Criosfera Armónica - Deep resonance physical modeling synthesizer
+ * Simulates giant organic pipes in cryogenic methane oceans.
+ */
+export class CriosferaEngine extends AbstractSynthEngine {
   private oscillators: Map<number, {
     osc1: OscillatorNode;
     osc2: OscillatorNode;
@@ -14,6 +15,7 @@ export class CriosferaEngine implements ISynthEngine {
     filter: BiquadFilterNode;
     gain: GainNode
   }> = new Map();
+
   private reverb: ConvolverNode | null = null;
   private delay: DelayNode | null = null;
   private delayFeedback: GainNode | null = null;
@@ -26,67 +28,64 @@ export class CriosferaEngine implements ISynthEngine {
 
   private noiseBuffer: AudioBuffer | null = null;
   private currentState: SynthState | null = null;
-  private isInitialized: boolean = false;
 
-  async init(ctx: AudioContext) {
-    // Prevent double initialization
-    if (this.isInitialized) return;
+  // Use custom audio routing for this engine
+  protected useDefaultRouting(): boolean {
+    return false;
+  }
 
-    this.ctx = ctx;
+  protected initializeEngine(): void {
+    const ctx = this.getContext();
+    const masterGain = this.getMasterGain();
+    if (!ctx || !masterGain) return;
 
-    this.noiseBuffer = createNoiseBuffer(this.ctx, 2);
+    // Set custom master gain
+    masterGain.gain.value = 0.8;
 
-    this.compressor = this.ctx.createDynamicsCompressor();
-    this.compressor.threshold.setValueAtTime(-24, this.ctx.currentTime);
-    this.compressor.knee.setValueAtTime(30, this.ctx.currentTime);
-    this.compressor.ratio.setValueAtTime(12, this.ctx.currentTime);
-    this.compressor.attack.setValueAtTime(0.003, this.ctx.currentTime);
-    this.compressor.release.setValueAtTime(0.25, this.ctx.currentTime);
+    this.noiseBuffer = createNoiseBuffer(ctx, 2);
 
-    this.masterGain = this.ctx.createGain();
-    this.masterGain.gain.value = 0.8;
-
-    this.lowPass = this.ctx.createBiquadFilter();
+    this.lowPass = ctx.createBiquadFilter();
     this.lowPass.type = 'lowpass';
     this.lowPass.frequency.value = 2000;
     this.lowPass.Q.value = 1;
 
-    this.distortion = this.ctx.createWaveShaper();
+    this.distortion = ctx.createWaveShaper();
     this.distortion.curve = makeDistortionCurve(0);
     this.distortion.oversample = '4x';
 
-    this.reverb = this.ctx.createConvolver();
-    this.reverb.buffer = createReverbImpulse(this.ctx, 6, 2);
+    this.reverb = ctx.createConvolver();
+    this.reverb.buffer = createReverbImpulse(ctx, 6, 2);
 
-    this.delay = this.ctx.createDelay(4.0);
+    this.delay = ctx.createDelay(4.0);
     this.delay.delayTime.value = 0.5;
-    this.delayFeedback = this.ctx.createGain();
+    this.delayFeedback = ctx.createGain();
     this.delayFeedback.gain.value = 0.4;
 
-    this.lfo = this.ctx.createOscillator();
+    this.lfo = ctx.createOscillator();
     this.lfo.type = 'sawtooth';
     this.lfo.frequency.value = 0.1;
 
-    this.lfoFilterGain = this.ctx.createGain();
+    this.lfoFilterGain = ctx.createGain();
     this.lfoFilterGain.gain.value = 0;
 
-    this.lfoDelayGain = this.ctx.createGain();
+    this.lfoDelayGain = ctx.createGain();
     this.lfoDelayGain.gain.value = 0;
 
-    this.masterGain.connect(this.distortion);
+    // Custom audio routing: masterGain -> distortion -> lowPass -> {compressor, reverb, delay}
+    masterGain.connect(this.distortion);
     this.distortion.connect(this.lowPass);
 
-    this.lowPass.connect(this.compressor);
+    this.lowPass.connect(this.compressor!);
     this.lowPass.connect(this.reverb);
     this.lowPass.connect(this.delay);
 
     this.delay.connect(this.delayFeedback);
     this.delayFeedback.connect(this.delay);
-    this.delay.connect(this.compressor);
+    this.delay.connect(this.compressor!);
 
-    this.reverb.connect(this.compressor);
+    this.reverb.connect(this.compressor!);
 
-    this.compressor.connect(this.ctx.destination);
+    this.compressor!.connect(ctx.destination);
 
     this.lfo.connect(this.lfoFilterGain);
     this.lfoFilterGain.connect(this.lowPass.frequency);
@@ -95,90 +94,93 @@ export class CriosferaEngine implements ISynthEngine {
     this.lfoDelayGain.connect(this.delay.delayTime);
 
     this.lfo.start();
-    this.isInitialized = true;
   }
 
   updateParameters(state: SynthState) {
-    if (!this.ctx || !this.masterGain || !this.lowPass || !this.delayFeedback || !this.distortion) return;
+    const ctx = this.getContext();
+    const masterGain = this.getMasterGain();
+    if (!ctx || !masterGain || !this.lowPass || !this.delayFeedback || !this.distortion) return;
 
     this.currentState = state;
     const timeConstant = 0.2;
 
     const targetGain = 0.2 + (state.pressure * 0.6);
-    this.masterGain.gain.setTargetAtTime(targetGain, this.ctx.currentTime, timeConstant);
+    masterGain.gain.setTargetAtTime(targetGain, ctx.currentTime, timeConstant);
 
     if (this.lfo && this.lfoFilterGain && this.lfoDelayGain) {
       const lfoSpeed = 0.1 + Math.pow(state.turbulence, 2) * 25;
-      this.lfo.frequency.setTargetAtTime(lfoSpeed, this.ctx.currentTime, timeConstant);
+      this.lfo.frequency.setTargetAtTime(lfoSpeed, ctx.currentTime, timeConstant);
 
       const filterDepth = 50 + Math.pow(state.turbulence, 2) * 3000;
-      this.lfoFilterGain.gain.setTargetAtTime(filterDepth, this.ctx.currentTime, timeConstant);
+      this.lfoFilterGain.gain.setTargetAtTime(filterDepth, ctx.currentTime, timeConstant);
 
       const delayModDepth = state.turbulence * 0.02;
-      this.lfoDelayGain.gain.setTargetAtTime(delayModDepth, this.ctx.currentTime, timeConstant);
+      this.lfoDelayGain.gain.setTargetAtTime(delayModDepth, ctx.currentTime, timeConstant);
     }
 
     const minFreq = 100;
     const maxFreq = 10000;
     const viscosityFreq = maxFreq - (state.viscosity * (maxFreq - minFreq));
-    this.lowPass.frequency.setTargetAtTime(Math.max(minFreq, viscosityFreq), this.ctx.currentTime, timeConstant);
+    this.lowPass.frequency.setTargetAtTime(Math.max(minFreq, viscosityFreq), ctx.currentTime, timeConstant);
 
-    this.lowPass.Q.setTargetAtTime(0.5 + (state.resonance * 15), this.ctx.currentTime, timeConstant);
-    this.delayFeedback.gain.setTargetAtTime(0.1 + (state.resonance * 0.85), this.ctx.currentTime, timeConstant);
+    this.lowPass.Q.setTargetAtTime(0.5 + (state.resonance * 15), ctx.currentTime, timeConstant);
+    this.delayFeedback.gain.setTargetAtTime(0.1 + (state.resonance * 0.85), ctx.currentTime, timeConstant);
 
     if (this.delay) {
-      this.delay.delayTime.setTargetAtTime(0.1 + state.diffusion * 2.5, this.ctx.currentTime, 1.0);
+      this.delay.delayTime.setTargetAtTime(0.1 + state.diffusion * 2.5, ctx.currentTime, 1.0);
     }
   }
 
-  playNote(frequency: number, velocity: number = 0.8) {
-    if (!this.ctx || !this.masterGain || !this.noiseBuffer) return;
+  playNote(frequency: number, velocity: number = 0.8): number | undefined {
+    const ctx = this.getContext();
+    const masterGain = this.getMasterGain();
+    if (!ctx || !masterGain || !this.noiseBuffer) return;
 
-    const t = this.ctx.currentTime;
+    const t = ctx.currentTime;
 
-    const osc1 = this.ctx.createOscillator();
+    const osc1 = ctx.createOscillator();
     osc1.type = 'sawtooth';
     osc1.frequency.setValueAtTime(frequency, t);
     osc1.detune.setValueAtTime((Math.random() - 0.5) * 15, t);
 
-    const osc2 = this.ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
     osc2.type = 'triangle';
     osc2.frequency.setValueAtTime(frequency, t);
     osc2.detune.setValueAtTime((Math.random() - 0.5) * 25 - 15, t);
 
-    const noise = this.ctx.createBufferSource();
+    const noise = ctx.createBufferSource();
     noise.buffer = this.noiseBuffer;
     noise.loop = true;
 
-    const noiseFilter = this.ctx.createBiquadFilter();
+    const noiseFilter = ctx.createBiquadFilter();
     noiseFilter.type = 'bandpass';
     noiseFilter.frequency.value = frequency * 2;
     noiseFilter.Q.value = 1;
 
-    const toneHighPass = this.ctx.createBiquadFilter();
+    const toneHighPass = ctx.createBiquadFilter();
     toneHighPass.type = 'highpass';
     toneHighPass.frequency.setValueAtTime(frequency * 0.9, t);
 
-    const filter = this.ctx.createBiquadFilter();
+    const filter = ctx.createBiquadFilter();
     filter.type = 'lowpass';
     filter.frequency.setValueAtTime(frequency * 0.8, t);
     filter.frequency.exponentialRampToValueAtTime(frequency * 3, t + 1.5);
 
-    const gain = this.ctx.createGain();
+    const gain = ctx.createGain();
     gain.gain.setValueAtTime(0, t);
     // Faster attack to avoid slow fade-in, but still smooth
     gain.gain.linearRampToValueAtTime(velocity * 0.6, t + 0.02);
 
     // Start oscillator gains at 0 and ramp up to avoid clicks
-    const osc1Gain = this.ctx.createGain();
+    const osc1Gain = ctx.createGain();
     osc1Gain.gain.setValueAtTime(0, t);
     osc1Gain.gain.linearRampToValueAtTime(0.15, t + 0.01);
 
-    const osc2Gain = this.ctx.createGain();
+    const osc2Gain = ctx.createGain();
     osc2Gain.gain.setValueAtTime(0, t);
     osc2Gain.gain.linearRampToValueAtTime(0.1, t + 0.01);
 
-    const noiseGain = this.ctx.createGain();
+    const noiseGain = ctx.createGain();
     noiseGain.gain.setValueAtTime(0, t);
     noiseGain.gain.linearRampToValueAtTime(0.6, t + 0.01);
 
@@ -191,7 +193,7 @@ export class CriosferaEngine implements ISynthEngine {
     noise.connect(noiseFilter).connect(noiseGain).connect(filter);
 
     filter.connect(gain);
-    gain.connect(this.masterGain);
+    gain.connect(masterGain);
 
     osc1.start();
     osc2.start();
@@ -205,10 +207,11 @@ export class CriosferaEngine implements ISynthEngine {
 
   stopNote(id: number) {
     const note = this.oscillators.get(id);
-    if (note && this.ctx) {
+    const ctx = this.getContext();
+    if (note && ctx) {
       const releaseTime = 1.0 + (this.currentState ? this.currentState.viscosity * 3 : 0);
 
-      const t = this.ctx.currentTime;
+      const t = ctx.currentTime;
 
       // Get current value first, then cancel, then set from current value to avoid clicks
       const currentGain = note.gain.gain.value;
@@ -232,12 +235,6 @@ export class CriosferaEngine implements ISynthEngine {
           this.oscillators.delete(id);
         }
       }, releaseTime * 1000 + 500);
-    }
-  }
-
-  async resume() {
-    if (this.ctx && this.ctx.state === 'suspended') {
-      await this.ctx.resume();
     }
   }
 }

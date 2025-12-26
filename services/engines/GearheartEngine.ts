@@ -1,6 +1,6 @@
 
 import { SynthState } from '../../types';
-import { ISynthEngine } from '../BaseSynthEngine';
+import { AbstractSynthEngine } from '../AbstractSynthEngine';
 import { makeSoftDistortionCurve, createReverbImpulse, createNoiseBuffer } from '../audioUtils';
 
 // Physics constants
@@ -29,11 +29,7 @@ export interface Gear {
   depth: number; // Distance from motor (0 = motor, 1 = connected to motor, etc.)
 }
 
-export class GearheartEngine implements ISynthEngine {
-  private ctx: AudioContext | null = null;
-  private masterGain: GainNode | null = null;
-  private compressor: DynamicsCompressorNode | null = null;
-
+export class GearheartEngine extends AbstractSynthEngine {
   // Reverb
   private reverb: ConvolverNode | null = null;
   private reverbGain: GainNode | null = null;
@@ -53,59 +49,61 @@ export class GearheartEngine implements ISynthEngine {
 
   // Motor State
   public isMotorActive: boolean = true;
-  private isInitialized: boolean = false;
 
   constructor() {
-    // Empty constructor - everything is done in init() for lazy loading
+    super();
   }
 
-  // --- Audio Setup (Existing) ---
+  // Use custom audio routing
+  protected useDefaultRouting(): boolean {
+    return false;
+  }
 
-  async init(ctx: AudioContext) {
-    // Prevent double initialization
-    if (this.isInitialized) return;
+  // --- Audio Setup ---
 
-    this.ctx = ctx;
+  protected initializeEngine(): void {
+    const ctx = this.getContext();
+    const masterGain = this.getMasterGain();
+    if (!ctx || !masterGain) return;
 
-    this.compressor = this.ctx.createDynamicsCompressor();
-    this.compressor.threshold.setValueAtTime(-10, this.ctx.currentTime);
-    this.compressor.ratio.setValueAtTime(4, this.ctx.currentTime);
-    this.compressor.knee.setValueAtTime(10, this.ctx.currentTime);
+    // Set custom master gain
+    masterGain.gain.value = 0.5;
 
-    this.masterGain = this.ctx.createGain();
-    this.masterGain.gain.value = 0.5;
+    // Custom compressor settings for percussion
+    this.compressor!.threshold.value = -10;
+    this.compressor!.ratio.value = 4;
+    this.compressor!.knee.value = 10;
 
     // Reverb Setup
-    this.reverb = this.ctx.createConvolver();
+    this.reverb = ctx.createConvolver();
     this.reverb.buffer = this.buildImpulse();
-    this.reverbGain = this.ctx.createGain();
+    this.reverbGain = ctx.createGain();
     this.reverbGain.gain.value = 0;
 
     // Percussion Filter
-    this.percussionFilter = this.ctx.createBiquadFilter();
+    this.percussionFilter = ctx.createBiquadFilter();
     this.percussionFilter.type = 'lowpass';
     this.percussionFilter.frequency.value = 2000;
     this.percussionFilter.Q.value = 2;
 
     // Distortion for percussive sound
-    this.distortion = this.ctx.createWaveShaper();
+    this.distortion = ctx.createWaveShaper();
     this.distortion.curve = makeSoftDistortionCurve(0.05);
 
-    // Routing
-    this.masterGain.connect(this.distortion);
+    // Custom routing: masterGain -> distortion -> percussionFilter -> {compressor, reverb}
+    masterGain.connect(this.distortion);
     this.distortion.connect(this.percussionFilter);
 
-    this.percussionFilter.connect(this.compressor); // Dry
-    this.percussionFilter.connect(this.reverb);     // Wet Send
+    this.percussionFilter.connect(this.compressor!); // Dry
+    this.percussionFilter.connect(this.reverb);       // Wet Send
     this.reverb.connect(this.reverbGain);
-    this.reverbGain.connect(this.compressor);
+    this.reverbGain.connect(this.compressor!);
 
-    this.compressor.connect(this.ctx.destination);
+    this.compressor!.connect(ctx.destination);
 
-    // Initialize gears and start physics loop only when initialized
+    // Initialize gears and start physics loop
     this.initGears();
     this.startPhysicsLoop();
-    this.isInitialized = true;
   }
 
   private buildImpulse(): AudioBuffer | null {
@@ -563,15 +561,17 @@ export class GearheartEngine implements ISynthEngine {
   }
 
   private playTomDrum(frequency: number, volume: number = 1.0) {
-    if (!this.ctx || !this.masterGain) return;
-    const now = this.ctx.currentTime;
+    const ctx = this.getContext();
+    const masterGain = this.getMasterGain();
+    if (!ctx || !masterGain) return;
+    const now = ctx.currentTime;
 
     // Longer decay for lower frequencies, shorter for higher
     const baseDec = frequency < 150 ? 0.4 : 0.25;
     const decay = baseDec + (this.turbulence * 0.2);
 
     // Main tone
-    const osc = this.ctx.createOscillator();
+    const osc = ctx.createOscillator();
     osc.type = 'sine';
     osc.frequency.setValueAtTime(frequency, now);
     osc.frequency.exponentialRampToValueAtTime(frequency * 0.75, now + 0.1);
@@ -584,13 +584,13 @@ export class GearheartEngine implements ISynthEngine {
     const baseVol = 0.1 + (freqFactor * 0.5); // Ranges from ~0.1 (highs) to 0.6 (lows)
 
     // Main envelope
-    const env = this.ctx.createGain();
+    const env = ctx.createGain();
     env.gain.setValueAtTime(baseVol * volume, now);
     env.gain.exponentialRampToValueAtTime(0.001, now + decay);
 
     // Connect
     osc.connect(env);
-    env.connect(this.masterGain);
+    env.connect(masterGain);
 
     osc.start(now);
     osc.stop(now + decay);
@@ -598,11 +598,5 @@ export class GearheartEngine implements ISynthEngine {
 
   stopNote() {
     // Percussion doesn't need stop
-  }
-
-  async resume() {
-    if (this.ctx && this.ctx.state === 'suspended') {
-      await this.ctx.resume();
-    }
   }
 }
