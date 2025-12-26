@@ -38,6 +38,9 @@ export class GearheartEngine extends AbstractSynthEngine {
   private percussionFilter: BiquadFilterNode | null = null;
   private distortion: WaveShaperNode | null = null;
 
+  // Audio output tap for vocoder carrier
+  private outputTap: GainNode | null = null;
+
   // Physics & Sequencer State
   private gears: Gear[] = [];
   private animationFrameId: number | null = null;
@@ -98,6 +101,11 @@ export class GearheartEngine extends AbstractSynthEngine {
     this.percussionFilter.connect(this.reverb);       // Wet Send
     this.reverb.connect(this.reverbGain);
     this.reverbGain.connect(this.compressor!);
+
+    // Create output tap for vocoder
+    this.outputTap = ctx.createGain();
+    this.outputTap.gain.value = 1.0;
+    masterGain.connect(this.outputTap);
 
     this.compressor!.connect(ctx.destination);
 
@@ -617,6 +625,13 @@ export class GearheartEngine extends AbstractSynthEngine {
   }
 
   stopNote() {
-    // Percussion doesn't need stop
+    // No-op, as we use trigger-based percussion
+  }
+
+  /**
+   * Get audio output tap for vocoder carrier
+   */
+  public getOutputTap(): GainNode | null {
+    return this.outputTap;
   }
 }

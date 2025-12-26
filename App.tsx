@@ -1,13 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Preferences } from '@capacitor/preferences';
-import { SynthState, ParameterType } from './types';
+import { ParameterType } from './types';
 import { synthManager } from './services/SynthManager';
-import { fetchTitanCondition } from './services/GeminiService';
 import Visualizer from './components/Visualizer';
-import ControlSlider from './components/ControlSlider';
 import BubbleXYPad from './components/BubbleXYPad';
 import GearSequencer from './components/GearSequencer';
 import EchoVesselUI from './components/EchoVesselUI';
+import VocoderUI from './components/VocoderUI';
+import EngineSelector from './components/EngineSelector';
+import ControlsPanel from './components/ControlsPanel';
+import { useSynth } from './hooks/useSynth';
 
 const NOTES = [
   { label: 'C2', freq: 65.41 },
@@ -60,165 +62,41 @@ const PARAM_LABELS_ECHO_AMBER: Record<string, string> = {
   diffusion: "ESPACIALIDADE"
 };
 
-interface Theme {
-  bg: string;
-  text: string;
-  accent: string;
-  border: string;
-}
-
-interface ControlsPanelProps {
-  currentEngine: 'criosfera' | 'gearheart' | 'echo-vessel';
-  theme: Theme;
-  state: SynthState;
-  isActive: boolean;
-  handleStart: () => void;
-  updateParam: (param: ParameterType, value: number) => void;
-  labels: Record<string, string>;
-  aiPrompt: string;
-  setAiPrompt: (val: string) => void;
-  apiKey: string;
-  generateAIPatch: () => void;
-  isAiLoading: boolean;
-  titanReport: string;
-  setIsSettingsOpen: (isOpen: boolean) => void;
-}
-
-const ControlsPanel = ({
-  currentEngine,
-  theme,
-  state,
-  isActive,
-  handleStart,
-  updateParam,
-  labels,
-  aiPrompt,
-  setAiPrompt,
-  apiKey,
-  generateAIPatch,
-  isAiLoading,
-  titanReport,
-  setIsSettingsOpen
-}: ControlsPanelProps) => (
-  <div className="flex flex-col h-full pt-4 md:pt-8">
-    <header className="mb-8 md:mb-12 flex justify-between items-start">
-      <div>
-        <h1 className={`text-2xl md:text-3xl font-bold tracking-tighter ${theme.accent} mb-1 uppercase`}>
-          {currentEngine.replace('-', ' ')}
-        </h1>
-        <h2 className="text-[9px] md:text-[10px] uppercase tracking-[0.3em] opacity-50">
-          {currentEngine === 'criosfera' ? 'Modulador Atmosférico' :
-            currentEngine === 'gearheart' ? 'Matriz de Ritmo' : 'Transmutador Vocal'}
-        </h2>
-      </div>
-      <button onClick={() => setIsSettingsOpen(true)} className="hidden md:block p-2 opacity-50 hover:opacity-100">
-        ⚙️
-      </button>
-    </header>
-
-    <div className={`flex-1 overflow-y-auto pr-2 scrollbar-thin ${!isActive ? 'opacity-40 pointer-events-none' : ''}`}>
-      <ControlSlider label={labels.pressure} value={state.pressure} onChange={(v) => updateParam(ParameterType.PRESSURE, v)} />
-      <ControlSlider label={labels.resonance} value={state.resonance} onChange={(v) => updateParam(ParameterType.RESONANCE, v)} />
-      <ControlSlider label={labels.viscosity} value={state.viscosity} onChange={(v) => updateParam(ParameterType.VISCOSITY, v)} />
-      <ControlSlider label={labels.turbulence} value={state.turbulence} onChange={(v) => updateParam(ParameterType.TURBULENCE, v)} />
-      <ControlSlider label={labels.diffusion} value={state.diffusion} onChange={(v) => updateParam(ParameterType.DIFFUSION, v)} />
-    </div>
-
-    <div className={`pt-6 border-t ${theme.border} mt-auto`}>
-      <div className="text-[10px] uppercase tracking-widest opacity-50 mb-4 font-bold">
-        {currentEngine === 'criosfera' ? 'Xerador de atmósferas' :
-          currentEngine === 'gearheart' ? 'Xerador de Maquinaria' : 'Xerador de Profecías'}
-      </div>
-      <div className="relative">
-        <input
-          type="text"
-          placeholder={apiKey ? "Descrición..." : "Configura a API Key"}
-          value={aiPrompt}
-          onChange={(e) => setAiPrompt(e.target.value)}
-          disabled={!apiKey}
-          className={`w-full bg-black/40 border ${theme.border} p-3 text-sm focus:outline-none transition-colors disabled:opacity-50 ${theme.text}`}
-          onKeyDown={(e) => e.key === 'Enter' && generateAIPatch()}
-        />
-        <button
-          onClick={generateAIPatch}
-          disabled={isAiLoading || !isActive || !apiKey}
-          className={`absolute right-2 top-1.5 p-2 ${theme.accent} disabled:opacity-30`}
-        >
-          {isAiLoading ? '...' : '→'}
-        </button>
-      </div>
-      <p className="mt-4 text-[11px] leading-relaxed italic opacity-60 min-h-[4em] max-h-[8em] overflow-y-auto font-mono">
-        {titanReport}
-      </p>
-    </div>
-  </div>
-);
+const PARAM_LABELS_VOCODER: Record<string, string> = {
+  pressure: "HUMIDADE DAS COVAS",
+  resonance: "RESONANCIA CRISTALINA",
+  viscosity: "BALANCE PORTADORAS",
+  turbulence: "DESPLAZAMENTO FORMANTE",
+  diffusion: "PROFUNDIDADE CAVERNA"
+};
 
 function App() {
-  const [currentEngine, setCurrentEngine] = useState<'criosfera' | 'gearheart' | 'echo-vessel'>('criosfera');
-
-  // Track which engines have been initialized (per-engine, not global)
-  const [initializedEngines, setInitializedEngines] = useState<Set<string>>(new Set());
-
-  // Default synth state
-  const defaultSynthState: SynthState = {
-    pressure: 0.7,
-    resonance: 0.6,
-    viscosity: 0.3,
-    turbulence: 0.2,
-    diffusion: 0.4,
-  };
-
-  // Per-engine states (each engine has independent parameters)
-  const [engineStates, setEngineStates] = useState<Record<string, SynthState>>({
-    'criosfera': { ...defaultSynthState },
-    'gearheart': { ...defaultSynthState },
-    'echo-vessel': { ...defaultSynthState }
-  });
-
-  // Current engine state helper
-  const state = engineStates[currentEngine] || defaultSynthState;
-  const setState = (updater: SynthState | ((prev: SynthState) => SynthState)) => {
-    setEngineStates(prev => ({
-      ...prev,
-      [currentEngine]: typeof updater === 'function' ? updater(prev[currentEngine]) : updater
-    }));
-  };
-
-  // Helper to check if current engine is initialized
-  const isCurrentEngineActive = initializedEngines.has(currentEngine);
-
-  // Per-engine AI prompts and reports
-  const [aiPrompts, setAiPrompts] = useState<Record<string, string>>({
-    'criosfera': '',
-    'gearheart': '',
-    'echo-vessel': ''
-  });
-  const [titanReports, setTitanReports] = useState<Record<string, string>>({
-    'criosfera': 'Sistema en espera...',
-    'gearheart': 'Sistema en espera...',
-    'echo-vessel': 'Sistema en espera...'
-  });
-
-  // Helpers for current engine
-  const aiPrompt = aiPrompts[currentEngine] || '';
-  const setAiPrompt = (value: string) => setAiPrompts(prev => ({ ...prev, [currentEngine]: value }));
-  const titanReport = titanReports[currentEngine] || '';
-  const setTitanReport = (value: string) => setTitanReports(prev => ({ ...prev, [currentEngine]: value }));
-
   const [apiKey, setApiKey] = useState('');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isAiLoading, setIsAiLoading] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [echoVial, setEchoVial] = useState<'neutral' | 'mercury' | 'amber'>('neutral');
+
+  const {
+    currentEngine,
+    state,
+    isCurrentActive,
+    aiPrompt,
+    titanReport,
+    isAiLoading,
+    playingFrequencies,
+    switchEngine,
+    toggleEngine,
+    updateParam,
+    toggleNote,
+    generateAIPatch,
+    setAiPrompt,
+    handleStart
+  } = useSynth('criosfera', apiKey);
 
   const [xyParams, setXyParams] = useState({
     x: ParameterType.RESONANCE,
     y: ParameterType.PRESSURE
   });
-
-  const [playingFrequencies, setPlayingFrequencies] = useState<Map<number, number>>(new Map());
-  const activeNotesRef = useRef<Map<number, number>>(new Map());
 
   // Labels actuais segundo motor
   const getLabels = () => {
@@ -230,6 +108,7 @@ function App() {
         if (echoVial === 'mercury') return PARAM_LABELS_ECHO_MERCURY;
         if (echoVial === 'amber') return PARAM_LABELS_ECHO_AMBER;
         return PARAM_LABELS_ECHO_NEUTRAL;
+      case 'vocoder': return PARAM_LABELS_VOCODER;
       default: return PARAM_LABELS_CRIOSFERA;
     }
   }
@@ -241,6 +120,8 @@ function App() {
       return { bg: 'bg-stone-950', text: 'text-stone-100', accent: 'text-orange-500', border: 'border-stone-800' };
     } else if (currentEngine === 'gearheart') {
       return { bg: 'bg-[#151210]', text: 'text-[#d4c5a9]', accent: 'text-[#ffbf69]', border: 'border-[#b08d55]/30' };
+    } else if (currentEngine === 'vocoder') {
+      return { bg: 'bg-[#0d1117]', text: 'text-emerald-100', accent: 'text-emerald-400', border: 'border-emerald-900/30' };
     } else {
       return { bg: 'bg-[#0a0f14]', text: 'text-slate-200', accent: 'text-cyan-500', border: 'border-cyan-900/30' };
     }
@@ -262,174 +143,34 @@ function App() {
     setIsSettingsOpen(false);
   };
 
+  // Connect engine audio taps to vocoder when vocoder is active
   useEffect(() => {
-    if (isCurrentEngineActive) {
-      synthManager.updateParameters(state);
-    }
-  }, [state, currentEngine, isCurrentEngineActive]);
+    if (currentEngine !== 'vocoder' || !isCurrentActive) return;
 
-  const handleStart = async () => {
-    await synthManager.init();
-    await synthManager.resume();
-    // Mark only the current engine as initialized
-    setInitializedEngines(prev => new Set(prev).add(currentEngine));
-  };
+    const vocoderEngine = synthManager.getVocoderEngine();
+    if (!vocoderEngine) return;
 
-  const toggleEngine = async () => {
-    if (isCurrentEngineActive) {
-      // Engine-specific cleanup
-      if (currentEngine === 'criosfera') {
-        // Stop all active notes
-        activeNotesRef.current.forEach((id) => {
-          synthManager.stopNote(id);
-        });
-        activeNotesRef.current.clear();
-        setPlayingFrequencies(new Map());
-      } else if (currentEngine === 'gearheart') {
-        // Stop motor, physics loop, and reset gears to initial configuration
-        const gearEngine = synthManager.getGearheartEngine();
-        if (gearEngine) {
-          if (gearEngine.isReady()) {
-            // Force motor off if running
-            const gears = gearEngine.getGears();
-            if (gears[0]?.isConnected) {
-              gearEngine.toggleMotor();
-            }
-          }
-          gearEngine.stopPhysicsLoop();
-          gearEngine.initGears(); // Reset to initial gear configuration
-        }
-      } else if (currentEngine === 'echo-vessel') {
-        const echoEngine = synthManager.getEchoVesselEngine();
-        if (echoEngine) {
-          echoEngine.setMicEnabled(false);
-          echoEngine.stopSpeech();
-        }
-      }
+    let criosferaTap: GainNode | null = null;
+    let gearheartTap: GainNode | null = null;
 
-      // Clear the AI report when deactivating
-      setTitanReport('Sistema en espera...');
-
-      // Deactivate: remove from initialized set
-      setInitializedEngines(prev => {
-        const next = new Set(prev);
-        next.delete(currentEngine);
-        return next;
-      });
-    } else {
-      // Activate
-      await handleStart();
-
-      // Engine-specific re-initialization after activation
-      if (currentEngine === 'gearheart') {
-        // Restart physics loop since it was stopped
-        const gearEngine = synthManager.getGearheartEngine();
-        if (gearEngine) {
-          gearEngine.startPhysicsLoop();
-        }
-      }
-    }
-  };
-
-  const handleEngineChange = (engine: 'criosfera' | 'gearheart' | 'echo-vessel') => {
-    setCurrentEngine(engine);
-    synthManager.switchEngine(engine);
-    // Reports are now per-engine, no need to overwrite
-  };
-
-  const updateParam = (param: ParameterType, value: number) => {
-    setState(prev => ({ ...prev, [param]: value }));
-  };
-
-  const toggleNote = (freq: number) => {
-    // If engine not active, do nothing (user must activate via title button)
-    if (!isCurrentEngineActive) {
-      return;
-    }
-
-    if (activeNotesRef.current.has(freq)) {
-      const id = activeNotesRef.current.get(freq);
-      if (id !== undefined) {
-        synthManager.stopNote(id);
-        activeNotesRef.current.delete(freq);
-        setPlayingFrequencies(prev => {
-          const next = new Map(prev);
-          next.delete(freq);
-          return next;
-        });
-      }
-    } else {
-      const id = synthManager.playNote(freq, 0.7);
-      if (id !== undefined) {
-        activeNotesRef.current.set(freq, id);
-        setPlayingFrequencies(prev => {
-          const next = new Map(prev);
-          next.set(freq, id);
-          return next;
-        });
-      }
-    }
-  };
-
-  const generateAIPatch = async () => {
-    if (!aiPrompt || !apiKey) return;
-    setIsAiLoading(true);
     try {
-      const condition = await fetchTitanCondition(aiPrompt, apiKey);
+      // Access internals - safer to add public accessors in SynthManager in future
+      const criosferaEngine = (synthManager as any).engines.get('criosfera');
+      const gearheartEngine = (synthManager as any).engines.get('gearheart');
 
-      // Use values from AI or fallbacks, clamped to 0-1
-      const clamp = (v: number) => Math.max(0, Math.min(1, v));
-
-      const s = {
-        turbulence: clamp(condition.stormLevel ?? 0.5),
-        viscosity: clamp(condition.methaneDensity ?? 0.5),
-        pressure: clamp(condition.temperature ?? 0.5),
-        resonance: clamp(0.5 + ((condition.stormLevel ?? 0.5) * 0.5)),
-        diffusion: clamp(0.3 + ((condition.methaneDensity ?? 0.5) * 0.4))
-      };
-
-      setState(prev => ({
-        ...prev,
-        ...s
-      }));
-
-      // Gearheart: only sound parameters are affected, gears remain unchanged
-
-      const reportText = condition.description || "Transmutación completada.";
-      setTitanReport(reportText);
-
-      // Update Speech Text only if in Echo Vessel
-      if (currentEngine === 'echo-vessel') {
-        const echoEngine = synthManager.getEchoVesselEngine();
-        if (echoEngine) {
-          echoEngine.setSpeechText(reportText);
-          echoEngine.speakOnce();
-        }
+      if (criosferaEngine && typeof (criosferaEngine as any).getOutputTap === 'function') {
+        criosferaTap = (criosferaEngine as any).getOutputTap() || null;
       }
-    } catch (err: any) {
-      console.error("AI Patch Error:", err);
-
-      // Provide more specific error messages based on error type
-      let errorMessage = "Erro descoñecido ao consultar o Oráculo.";
-      const errMsg = err?.message?.toLowerCase() || '';
-
-      if (errMsg.includes('fetch') || errMsg.includes('network') || errMsg.includes('failed to fetch')) {
-        errorMessage = "Erro de conexión. Verifica a túa rede e tenta de novo.";
-      } else if (errMsg.includes('401') || errMsg.includes('api key') || errMsg.includes('unauthorized')) {
-        errorMessage = "Erro de autenticación. A API Key pode ser inválida.";
-      } else if (errMsg.includes('429') || errMsg.includes('rate limit') || errMsg.includes('quota')) {
-        errorMessage = "Demasiadas solicitudes. Agarda uns segundos e tenta de novo.";
-      } else if (errMsg.includes('timeout')) {
-        errorMessage = "A solicitude tardou demasiado. Tenta de novo.";
-      } else if (err?.message) {
-        errorMessage = `Erro: ${err.message}`;
+      if (gearheartEngine && typeof (gearheartEngine as any).getOutputTap === 'function') {
+        gearheartTap = (gearheartEngine as any).getOutputTap() || null;
       }
-
-      setTitanReport(errorMessage);
-    } finally {
-      setIsAiLoading(false);
+    } catch (e) {
+      console.error('[App] Error getting engine taps:', e);
     }
-  };
+
+    vocoderEngine.setCarrierSources(criosferaTap, gearheartTap);
+    console.log('[App] Connected engine taps to vocoder carrier');
+  }, [currentEngine, isCurrentActive]);
 
   return (
     <div className={`relative w-full h-screen flex flex-col md:flex-row overflow-hidden transition-colors duration-500 pt-12 ${theme.bg} ${theme.text}`}>
@@ -454,38 +195,14 @@ function App() {
         </div>
       )}
 
-      <div className="absolute top-0 left-0 w-full z-[100] flex justify-center pt-3 pointer-events-none">
-        <div className="flex gap-1 bg-black/40 backdrop-blur-xl p-1 rounded-full border border-white/10 pointer-events-auto shadow-xl">
-          <button
-            onClick={() => handleEngineChange('criosfera')}
-            className={`px-3 py-1 rounded-full text-[9px] uppercase tracking-widest transition-all ${currentEngine === 'criosfera' ? 'bg-stone-800 text-orange-400 shadow-sm' : 'opacity-50 hover:opacity-100'
-              }`}
-          >
-            Criosfera
-          </button>
-          <button
-            onClick={() => handleEngineChange('gearheart')}
-            className={`px-3 py-1 rounded-full text-[9px] uppercase tracking-widest transition-all ${currentEngine === 'gearheart' ? 'bg-[#3a2e26] text-[#ffbf69] shadow-sm' : 'opacity-50 hover:opacity-100'
-              }`}
-          >
-            Gearheart
-          </button>
-          <button
-            onClick={() => handleEngineChange('echo-vessel')}
-            className={`px-3 py-1 rounded-full text-[9px] uppercase tracking-widest transition-all ${currentEngine === 'echo-vessel' ? 'bg-cyan-900 text-cyan-400 shadow-sm' : 'opacity-50 hover:opacity-100'
-              }`}
-          >
-            Echo Vessel
-          </button>
-        </div>
-      </div>
+      <EngineSelector currentEngine={currentEngine} onEngineChange={switchEngine} />
 
       <aside className={`hidden md:flex w-80 h-full bg-black/20 backdrop-blur-xl border-r ${theme.border} p-8 z-30`}>
         <ControlsPanel
           currentEngine={currentEngine}
           theme={theme}
           state={state}
-          isActive={isCurrentEngineActive}
+          isActive={isCurrentActive}
           handleStart={handleStart}
           updateParam={updateParam}
           labels={labels}
@@ -512,7 +229,7 @@ function App() {
               currentEngine={currentEngine}
               theme={theme}
               state={state}
-              isActive={isCurrentEngineActive}
+              isActive={isCurrentActive}
               handleStart={handleStart}
               updateParam={updateParam}
               labels={labels}
@@ -535,8 +252,8 @@ function App() {
             onClick={toggleEngine}
             className="pointer-events-auto flex items-center gap-2 active:scale-95 transition-transform"
           >
-            <span className={`w-2 h-2 rounded-full ${isCurrentEngineActive ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-gray-600'}`} />
-            <h1 className={`text-xl font-bold tracking-tighter uppercase ${isCurrentEngineActive ? theme.accent : 'opacity-50'}`}>
+            <span className={`w-2 h-2 rounded-full ${isCurrentActive ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-gray-600'}`} />
+            <h1 className={`text-xl font-bold tracking-tighter uppercase ${isCurrentActive ? theme.accent : 'opacity-50'}`}>
               {currentEngine.replace('-', ' ')}
             </h1>
           </button>
@@ -559,7 +276,7 @@ function App() {
         </div>
 
         {/* AI Generated Text Overlay - between engine selector and header */}
-        {isCurrentEngineActive && titanReport && titanReport !== 'Sistema en espera...' && (
+        {isCurrentActive && titanReport && titanReport !== 'Sistema en espera...' && (
           <div className="md:hidden absolute top-4 left-0 w-full px-6 z-30 pointer-events-none">
             <div className={`text-xs ${theme.accent} opacity-70 font-mono tracking-wide text-center`}>
               {titanReport}
@@ -596,7 +313,7 @@ function App() {
                     yValue={state[xyParams.y]}
                     xLabel={labels[xyParams.x]}
                     yLabel={labels[xyParams.y]}
-                    onChange={(x, y) => setState(prev => ({ ...prev, [xyParams.x]: x, [xyParams.y]: y }))}
+                    onChange={(x, y) => updateParam(xyParams.x, x) || updateParam(xyParams.y, y)}
                   />
                 </div>
                 <div className="w-full grid grid-cols-7 gap-2">
@@ -622,14 +339,21 @@ function App() {
             <div className="w-full h-full relative">
               <GearSequencer
                 diffusion={state.diffusion}
-                isActive={isCurrentEngineActive}
+                isActive={isCurrentActive}
+              />
+            </div>
+          ) : currentEngine === 'vocoder' ? (
+            <div className="w-full h-full relative">
+              <VocoderUI
+                isActive={isCurrentActive}
+                engine={isCurrentActive ? synthManager.getVocoderEngine() : undefined}
               />
             </div>
           ) : (
             <div className="w-full h-full relative">
               <EchoVesselUI
-                isActive={isCurrentEngineActive}
-                engine={isCurrentEngineActive ? synthManager.getEchoVesselEngine() : undefined}
+                isActive={isCurrentActive}
+                engine={isCurrentActive ? synthManager.getEchoVesselEngine() : undefined}
                 aiPrompt={aiPrompt}
                 onGenerate={generateAIPatch}
                 hasApiKey={!!apiKey}

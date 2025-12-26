@@ -3,6 +3,7 @@ import { SynthState } from '../types';
 import { engineRegistry } from './EngineRegistry';
 import { GearheartEngine } from './engines/GearheartEngine';
 import { EchoVesselEngine } from './engines/EchoVesselEngine';
+import { VocoderEngine } from './engines/VocoderEngine';
 
 // Import engine registrations to ensure they're registered
 import './engines';
@@ -81,6 +82,13 @@ class SynthManager {
       console.warn(`Cannot switch to unknown engine: ${engineName}`);
       return;
     }
+
+    // Reset the previous engine if it has a reset method
+    const previousEngine = this.engines.get(this.activeEngineName);
+    if (previousEngine && typeof (previousEngine as any).reset === 'function') {
+      (previousEngine as any).reset();
+    }
+
     this.activeEngineName = engineName;
   }
 
@@ -98,6 +106,19 @@ class SynthManager {
     return this.engines.get('echo-vessel') as EchoVesselEngine | undefined;
   }
 
+  /**
+   * Get typed access to Vocoder engine (for engine-specific methods)
+   */
+  getVocoderEngine(): VocoderEngine | undefined {
+    const engine = this.engines.get('vocoder');
+    if (engine) {
+      return engine as VocoderEngine;
+    }
+    // If not yet created, create it first
+    this.getOrCreateEngine('vocoder');
+    return this.engines.get('vocoder') as VocoderEngine | undefined;
+  }
+
   getCurrentEngineName(): string {
     return this.activeEngineName;
   }
@@ -107,6 +128,36 @@ class SynthManager {
    */
   getAvailableEngines(): string[] {
     return engineRegistry.getNames();
+  }
+
+  /**
+   * Stop the currently active engine
+   */
+  stopActiveEngine() {
+    const engine = this.engines.get(this.activeEngineName);
+    if (engine) {
+      // For Gearheart engine, stop the physics loop
+      if (this.activeEngineName === 'gearheart') {
+        const gearEngine = engine as any; // Type assertion since we know it's GearheartEngine
+        if (gearEngine.stopPhysicsLoop) {
+          gearEngine.stopPhysicsLoop();
+        }
+      }
+      // For Echo Vessel engine, disable mic
+      if (this.activeEngineName === 'echo-vessel') {
+        const echoEngine = engine as any;
+        if (echoEngine.setMicEnabled) {
+          echoEngine.setMicEnabled(false);
+        }
+      }
+      // For Vocoder engine, disable mic
+      if (this.activeEngineName === 'vocoder') {
+        const vocoderEngine = engine as any;
+        if (vocoderEngine.setMicEnabled) {
+          vocoderEngine.setMicEnabled(false);
+        }
+      }
+    }
   }
 
   /**

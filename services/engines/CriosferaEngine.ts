@@ -22,6 +22,8 @@ export class CriosferaEngine extends AbstractSynthEngine {
   private lowPass: BiquadFilterNode | null = null;
   private distortion: WaveShaperNode | null = null;
 
+  // Audio output tap for vocoder carrier
+  private outputTap: GainNode | null = null;
   private lfo: OscillatorNode | null = null;
   private lfoFilterGain: GainNode | null = null;
   private lfoDelayGain: GainNode | null = null;
@@ -84,6 +86,14 @@ export class CriosferaEngine extends AbstractSynthEngine {
     this.delay.connect(this.compressor!);
 
     this.reverb.connect(this.compressor!);
+
+    // Create output tap for vocoder (pre-compressor)
+    this.outputTap = ctx.createGain();
+    this.outputTap.gain.value = 1.0;
+    // Connect the main signal path (before compressor) to the output tap
+    this.lowPass.connect(this.outputTap);
+    // The outputTap itself should not connect to ctx.destination directly,
+    // but rather be available for external connections (e.g., vocoder)
 
     this.compressor!.connect(ctx.destination);
 
@@ -168,6 +178,7 @@ export class CriosferaEngine extends AbstractSynthEngine {
     filter.frequency.exponentialRampToValueAtTime(frequency * 3, t + 1.5);
 
     const gain = ctx.createGain();
+    gain.gain.value = 0;
     gain.gain.setValueAtTime(0, t);
     // Faster attack to avoid slow fade-in, but still smooth
     gain.gain.linearRampToValueAtTime(velocity * 0.6, t + 0.02);
@@ -175,14 +186,17 @@ export class CriosferaEngine extends AbstractSynthEngine {
     // Start oscillator gains at 0 and ramp up to avoid clicks
     // Less tonal: oscillators reduced, noise boosted for atmospheric sound
     const osc1Gain = ctx.createGain();
+    osc1Gain.gain.value = 0;
     osc1Gain.gain.setValueAtTime(0, t);
     osc1Gain.gain.linearRampToValueAtTime(0.08, t + 0.01); // Reduced for less fundamental
 
     const osc2Gain = ctx.createGain();
+    osc2Gain.gain.value = 0;
     osc2Gain.gain.setValueAtTime(0, t);
     osc2Gain.gain.linearRampToValueAtTime(0.06, t + 0.01); // Reduced for less definition
 
     const noiseGain = ctx.createGain();
+    noiseGain.gain.value = 0;
     noiseGain.gain.setValueAtTime(0, t);
     noiseGain.gain.linearRampToValueAtTime(0.7, t + 0.01); // Boosted for more texture
 
@@ -238,5 +252,12 @@ export class CriosferaEngine extends AbstractSynthEngine {
         }
       }, releaseTime * 1000 + 500);
     }
+  }
+
+  /**
+   * Get audio output tap for vocoder carrier
+   */
+  public getOutputTap(): GainNode | null {
+    return this.outputTap;
   }
 }

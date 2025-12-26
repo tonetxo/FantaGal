@@ -1,10 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { ParameterType, SynthState, PlanetaryCondition } from '../types';
+import { ParameterType, SynthState } from '../types';
 import { synthManager } from '../services/SynthManager';
 import { fetchTitanCondition } from '../services/GeminiService';
-import { Preferences } from '@capacitor/preferences';
 
-export const useSynth = (initialEngine: 'criosfera' | 'gearheart' | 'echo-vessel', apiKeyProp: string) => {
+export const useSynth = (initialEngine: 'criosfera' | 'gearheart' | 'echo-vessel' | 'vocoder', apiKeyProp: string) => {
     const [currentEngine, setCurrentEngine] = useState(initialEngine);
     const [initializedEngines, setInitializedEngines] = useState<Set<string>>(new Set());
     const [isAiLoading, setIsAiLoading] = useState(false);
@@ -20,19 +19,22 @@ export const useSynth = (initialEngine: 'criosfera' | 'gearheart' | 'echo-vessel
     const [engineStates, setEngineStates] = useState<Record<string, SynthState>>({
         'criosfera': { ...defaultSynthState },
         'gearheart': { ...defaultSynthState },
-        'echo-vessel': { ...defaultSynthState }
+        'echo-vessel': { ...defaultSynthState },
+        'vocoder': { ...defaultSynthState }
     });
 
     const [aiPrompts, setAiPrompts] = useState<Record<string, string>>({
         'criosfera': '',
         'gearheart': '',
-        'echo-vessel': ''
+        'echo-vessel': '',
+        'vocoder': ''
     });
 
     const [titanReports, setTitanReports] = useState<Record<string, string>>({
         'criosfera': 'Sistema en espera...',
         'gearheart': 'Sistema en espera...',
-        'echo-vessel': 'Sistema en espera...'
+        'echo-vessel': 'Sistema en espera...',
+        'vocoder': 'Sistema en espera...'
     });
 
     const [playingFrequencies, setPlayingFrequencies] = useState<Map<number, number>>(new Map());
@@ -67,11 +69,38 @@ export const useSynth = (initialEngine: 'criosfera' | 'gearheart' | 'echo-vessel
 
     const toggleEngine = async () => {
         if (isCurrentActive) {
-            synthManager.stopActiveEngine();
+            // Engine-specific cleanup
             if (currentEngine === 'criosfera') {
+                activeNotesRef.current.forEach((id) => {
+                    synthManager.stopNote(id);
+                });
                 activeNotesRef.current.clear();
                 setPlayingFrequencies(new Map());
+            } else if (currentEngine === 'gearheart') {
+                const gearEngine = synthManager.getGearheartEngine();
+                if (gearEngine) {
+                    if (gearEngine.isReady()) {
+                        const gears = gearEngine.getGears();
+                        if (gears[0]?.isConnected) {
+                            gearEngine.toggleMotor();
+                        }
+                    }
+                    gearEngine.stopPhysicsLoop();
+                    gearEngine.initGears();
+                }
+            } else if (currentEngine === 'echo-vessel') {
+                const echoEngine = synthManager.getEchoVesselEngine();
+                if (echoEngine) {
+                    echoEngine.setMicEnabled(false);
+                    echoEngine.stopSpeech();
+                }
+            } else if (currentEngine === 'vocoder') {
+                const vocoderEngine = synthManager.getVocoderEngine();
+                if (vocoderEngine) {
+                    await vocoderEngine.setMicEnabled(false);
+                }
             }
+
             setTitanReport('Sistema en espera...');
             setInitializedEngines(prev => {
                 const next = new Set(prev);
@@ -81,12 +110,15 @@ export const useSynth = (initialEngine: 'criosfera' | 'gearheart' | 'echo-vessel
         } else {
             await handleStart();
             if (currentEngine === 'gearheart') {
-                synthManager.getGearheartEngine()?.startPhysicsLoop();
+                const gearEngine = synthManager.getGearheartEngine();
+                if (gearEngine) {
+                    gearEngine.startPhysicsLoop();
+                }
             }
         }
     };
 
-    const switchEngine = (engine: any) => {
+    const switchEngine = (engine: 'criosfera' | 'gearheart' | 'echo-vessel' | 'vocoder') => {
         setCurrentEngine(engine);
         synthManager.switchEngine(engine);
     };
@@ -150,7 +182,24 @@ export const useSynth = (initialEngine: 'criosfera' | 'gearheart' | 'echo-vessel
             }
         } catch (err: any) {
             console.error("AI Patch Error:", err);
-            setTitanReport(`Erro: ${err.message}`);
+            
+             // Provide more specific error messages
+            let errorMessage = "Erro descoñecido ao consultar o Oráculo.";
+            const errMsg = err?.message?.toLowerCase() || '';
+
+            if (errMsg.includes('fetch') || errMsg.includes('network') || errMsg.includes('failed to fetch')) {
+                errorMessage = "Erro de conexión. Verifica a túa rede e tenta de novo.";
+            } else if (errMsg.includes('401') || errMsg.includes('api key') || errMsg.includes('unauthorized')) {
+                errorMessage = "Erro de autenticación. A API Key pode ser inválida.";
+            } else if (errMsg.includes('429') || errMsg.includes('rate limit') || errMsg.includes('quota')) {
+                errorMessage = "Demasiadas solicitudes. Agarda uns segundos e tenta de novo.";
+            } else if (errMsg.includes('timeout')) {
+                errorMessage = "A solicitude tardou demasiado. Tenta de novo.";
+            } else if (err?.message) {
+                errorMessage = `Erro: ${err.message}`;
+            }
+            
+            setTitanReport(errorMessage);
         } finally {
             setIsAiLoading(false);
         }
@@ -170,6 +219,7 @@ export const useSynth = (initialEngine: 'criosfera' | 'gearheart' | 'echo-vessel
         toggleNote,
         generateAIPatch,
         setAiPrompt,
-        setTitanReport
+        setTitanReport,
+        handleStart
     };
 };

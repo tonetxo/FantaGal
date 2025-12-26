@@ -111,4 +111,9 @@ export abstract class AbstractSynthEngine implements ISynthEngine {
      * Stop a note by its ID.
      */
     abstract stopNote(id: number): void;
+
+    /**
+     * Reset the engine to its default state when deactivated
+     */
+    reset?(): void; // Optional method that can be implemented by subclasses
 }

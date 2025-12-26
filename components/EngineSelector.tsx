@@ -2,7 +2,7 @@ import React from 'react';
 
 interface EngineSelectorProps {
     currentEngine: string;
-    onEngineChange: (engine: 'criosfera' | 'gearheart' | 'echo-vessel') => void;
+    onEngineChange: (engine: 'criosfera' | 'gearheart' | 'echo-vessel' | 'vocoder') => void;
 }
 
 const EngineSelector = ({ currentEngine, onEngineChange }: EngineSelectorProps) => {
@@ -29,6 +29,13 @@ const EngineSelector = ({ currentEngine, onEngineChange }: EngineSelectorProps) 
                         }`}
                 >
                     Echo Vessel
+                </button>
+                <button
+                    onClick={() => onEngineChange('vocoder')}
+                    className={`px-3 py-1 rounded-full text-[9px] uppercase tracking-widest transition-all ${currentEngine === 'vocoder' ? 'bg-emerald-900 text-emerald-400 shadow-sm' : 'opacity-50 hover:opacity-100'
+                        }`}
+                >
+                    Vocoder
                 </button>
             </div>
         </div>
