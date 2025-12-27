@@ -10,7 +10,7 @@ interface Theme {
 }
 
 interface ControlsPanelProps {
-  currentEngine: 'criosfera' | 'gearheart' | 'echo-vessel' | 'vocoder';
+  currentEngine: 'criosfera' | 'gearheart' | 'echo-vessel' | 'vocoder' | 'breitema';
   theme: Theme;
   state: SynthState;
   isActive: boolean;
@@ -44,12 +44,13 @@ const ControlsPanel = ({
     <header className="mb-8 md:mb-12 flex justify-between items-start">
       <div>
         <h1 className={`text-2xl md:text-3xl font-bold tracking-tighter ${theme.accent} mb-1 uppercase`}>
-          {currentEngine.replace('-', ' ')}
+          {{ 'criosfera': 'Criosfera', 'gearheart': 'Gearheart', 'echo-vessel': 'Echo Vessel', 'vocoder': 'Vocoder', 'breitema': 'Brétema' }[currentEngine] || currentEngine}
         </h1>
         <h2 className="text-[9px] md:text-[10px] uppercase tracking-[0.3em] opacity-50">
           {currentEngine === 'criosfera' ? 'Modulador Atmosférico' :
             currentEngine === 'gearheart' ? 'Matriz de Ritmo' :
-              currentEngine === 'echo-vessel' ? 'Transmutador Vocal' : 'Sintese Espectral'}
+              currentEngine === 'echo-vessel' ? 'Transmutador Vocal' :
+                currentEngine === 'breitema' ? 'Reixa Generativa' : 'Sintese Espectral'}
         </h2>
       </div>
       <button onClick={() => setIsSettingsOpen(true)} className="hidden md:block p-2 opacity-50 hover:opacity-100">
@@ -69,7 +70,8 @@ const ControlsPanel = ({
       <div className="text-[10px] uppercase tracking-widest opacity-50 mb-4 font-bold">
         {currentEngine === 'criosfera' ? 'Xerador de atmósferas' :
           currentEngine === 'gearheart' ? 'Xerador de Maquinaria' :
-            currentEngine === 'echo-vessel' ? 'Xerador de Profecías' : 'Xerador de Covas'}
+            currentEngine === 'echo-vessel' ? 'Xerador de Profecías' :
+              currentEngine === 'breitema' ? 'Xerador de Patróns' : 'Xerador de Covas'}
       </div>
       <div className="relative">
         <input
