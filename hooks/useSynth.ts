@@ -20,21 +20,24 @@ export const useSynth = (initialEngine: 'criosfera' | 'gearheart' | 'echo-vessel
         'criosfera': { ...defaultSynthState },
         'gearheart': { ...defaultSynthState },
         'echo-vessel': { ...defaultSynthState },
-        'vocoder': { ...defaultSynthState }
+        'vocoder': { ...defaultSynthState },
+        'breitema': { ...defaultSynthState }
     });
 
     const [aiPrompts, setAiPrompts] = useState<Record<string, string>>({
         'criosfera': '',
         'gearheart': '',
         'echo-vessel': '',
-        'vocoder': ''
+        'vocoder': '',
+        'breitema': ''
     });
 
     const [titanReports, setTitanReports] = useState<Record<string, string>>({
         'criosfera': 'Sistema en espera...',
         'gearheart': 'Sistema en espera...',
         'echo-vessel': 'Sistema en espera...',
-        'vocoder': 'Sistema en espera...'
+        'vocoder': 'Sistema en espera...',
+        'breitema': 'Sistema en espera...'
     });
 
     const [playingFrequencies, setPlayingFrequencies] = useState<Map<number, number>>(new Map());
@@ -98,6 +101,11 @@ export const useSynth = (initialEngine: 'criosfera' | 'gearheart' | 'echo-vessel
                 const vocoderEngine = synthManager.getVocoderEngine();
                 if (vocoderEngine) {
                     await vocoderEngine.setMicEnabled(false);
+                }
+            } else if (currentEngine === 'breitema') {
+                const breitemaEngine = synthManager.getEngine('breitema');
+                if (breitemaEngine?.reset) {
+                    breitemaEngine.reset();
                 }
             }
 

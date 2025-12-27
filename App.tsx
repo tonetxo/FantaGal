@@ -7,6 +7,7 @@ import BubbleXYPad from './components/BubbleXYPad';
 import GearSequencer from './components/GearSequencer';
 import EchoVesselUI from './components/EchoVesselUI';
 import VocoderUI from './components/VocoderUI';
+import BreitemaUI from './components/BreitemaUI';
 import EngineSelector from './components/EngineSelector';
 import ControlsPanel from './components/ControlsPanel';
 import { useSynth } from './hooks/useSynth';
@@ -70,6 +71,14 @@ const PARAM_LABELS_VOCODER: Record<string, string> = {
   diffusion: "PROFUNDIDADE CAVERNA"
 };
 
+const PARAM_LABELS_BREITEMA: Record<string, string> = {
+  pressure: "TEMPO",
+  resonance: "PROFUNDIDADE FM",
+  viscosity: "DENSIDADE BRÉTEMA",
+  turbulence: "MOVEMENTO NÉBOA",
+  diffusion: "REVERBERACIÓN"
+};
+
 function App() {
   const [apiKey, setApiKey] = useState('');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -110,6 +119,7 @@ function App() {
         if (echoVial === 'amber') return PARAM_LABELS_ECHO_AMBER;
         return PARAM_LABELS_ECHO_NEUTRAL;
       case 'vocoder': return PARAM_LABELS_VOCODER;
+      case 'breitema': return PARAM_LABELS_BREITEMA;
       default: return PARAM_LABELS_CRIOSFERA;
     }
   }
@@ -123,6 +133,8 @@ function App() {
       return { bg: 'bg-[#151210]', text: 'text-[#d4c5a9]', accent: 'text-[#ffbf69]', border: 'border-[#b08d55]/30' };
     } else if (currentEngine === 'vocoder') {
       return { bg: 'bg-[#0d1117]', text: 'text-emerald-100', accent: 'text-emerald-400', border: 'border-emerald-900/30' };
+    } else if (currentEngine === 'breitema') {
+      return { bg: 'bg-[#0f1318]', text: 'text-[#9faab8]', accent: 'text-[#8be9fd]', border: 'border-[#44475a]/40' };
     } else {
       return { bg: 'bg-[#0a0f14]', text: 'text-slate-200', accent: 'text-cyan-500', border: 'border-cyan-900/30' };
     }
@@ -353,6 +365,13 @@ function App() {
               <VocoderUI
                 isActive={isCurrentActive}
                 engine={isCurrentActive ? synthManager.getVocoderEngine() : undefined}
+              />
+            </div>
+          ) : currentEngine === 'breitema' ? (
+            <div className="w-full h-full relative">
+              <BreitemaUI
+                isActive={isCurrentActive}
+                theme={theme}
               />
             </div>
           ) : (
