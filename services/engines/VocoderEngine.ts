@@ -1,6 +1,6 @@
 import { SynthState } from '../../types';
 import { AbstractSynthEngine } from '../AbstractSynthEngine';
-import { createReverbImpulse } from '../audioUtils';
+import { createReverbImpulse, createNoiseBuffer } from '../audioUtils';
 
 /**
  * Vocoder das Covas - Cave Vocoder
@@ -36,6 +36,7 @@ export class VocoderEngine extends AbstractSynthEngine {
     // State
     private isMicActive: boolean = false;
     private carrierBalance: number = 0.5; // 0 = all Criosfera, 1 = all Gearheart
+    private envelopeAnimationId: number | null = null; // For cancelling animation loop
 
     protected useDefaultRouting(): boolean {
         return false; // Custom routing
@@ -100,15 +101,8 @@ export class VocoderEngine extends AbstractSynthEngine {
         const ctx = this.getContext();
         if (!ctx || !this.internalCarrierGain) return;
 
-        console.log('[Vocoder] Creating internal carrier...');
-
-        // Create white noise buffer
-        const bufferSize = ctx.sampleRate * 2;
-        const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-        const data = noiseBuffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) {
-            data[i] = Math.random() * 2 - 1;
-        }
+        // Create white noise buffer using shared utility
+        const noiseBuffer = createNoiseBuffer(ctx, 2);
 
         // Noise source - create fresh each time
         this.internalNoise = ctx.createBufferSource();
@@ -116,7 +110,6 @@ export class VocoderEngine extends AbstractSynthEngine {
         this.internalNoise.loop = true;
         this.internalNoise.connect(this.internalCarrierGain);
         this.internalNoise.start();
-        console.log('[Vocoder] Noise source started');
 
         // Add harmonic oscillators for tonal content
         const harmonics = [110, 220, 330, 440]; // A2 and harmonics
@@ -132,7 +125,6 @@ export class VocoderEngine extends AbstractSynthEngine {
             osc.start();
             this.internalOscillators.push(osc);
         });
-        console.log(`[Vocoder] ${harmonics.length} oscillators started`);
     }
 
     private stopInternalCarrier(): void {
@@ -239,11 +231,6 @@ export class VocoderEngine extends AbstractSynthEngine {
                 }
                 const rms = Math.sqrt(sum / dataArray.length);
 
-                // Log RMS for first band only (to avoid console spam)
-                if (index === 0 && Math.random() < 0.1) { // Log 10% of frames
-                    console.log(`[Vocoder] Band 0 RMS: ${rms.toFixed(4)}`);
-                }
-
                 // Apply to carrier band gain - adjusted for better response
                 // Use a more sensitive scaling for microphone input
                 const minGain = 0.01; // Lower floor to allow more subtle modulation
@@ -251,7 +238,7 @@ export class VocoderEngine extends AbstractSynthEngine {
                 gain.gain.setTargetAtTime(modulatedGain, ctx!.currentTime, 0.01); // Use setTargetAtTime with small time constant to avoid clicks
             });
 
-            requestAnimationFrame(update);
+            this.envelopeAnimationId = requestAnimationFrame(update);
         };
 
         update();
@@ -263,8 +250,6 @@ export class VocoderEngine extends AbstractSynthEngine {
     public setCarrierSources(criosferaTap: GainNode | null, gearheartTap: GainNode | null): void {
         const ctx = this.getContext();
         if (!ctx) return;
-
-        console.log('[Vocoder] setCarrierSources called');
 
         // Disconnect old taps from ALL carrier bands
         if (this.criosferaTap) {
@@ -295,14 +280,12 @@ export class VocoderEngine extends AbstractSynthEngine {
             this.carrierBands.forEach(band => {
                 criosferaTap.connect(band);
             });
-            console.log(`[Vocoder] ✓ Connected Criosfera to ${this.carrierBands.length} carrier bands`);
         }
 
         if (gearheartTap) {
             this.carrierBands.forEach(band => {
                 gearheartTap.connect(band);
             });
-            console.log(`[Vocoder] ✓ Connected Gearheart to ${this.carrierBands.length} carrier bands`);
         }
 
         // Update carrier balance
@@ -314,8 +297,6 @@ export class VocoderEngine extends AbstractSynthEngine {
             console.warn('[Vocoder] updateCarrierBalance called but internalCarrierGain is null');
             return;
         }
-
-        console.log(`[Vocoder] updateCarrierBalance - carrierBalance (viscosity): ${this.carrierBalance.toFixed(2)}`);
 
         // carrierBalance comes from viscosity parameter (0-1)
         // 0 = internal only, 1 = external only
@@ -330,8 +311,6 @@ export class VocoderEngine extends AbstractSynthEngine {
         if (!ctx) return;
 
         this.internalCarrierGain.gain.setTargetAtTime(internalGain, ctx.currentTime, 0.1);
-        console.log(`[Vocoder] ✓ Carrier balance updated - Internal gain: ${internalGain.toFixed(4)}, External weight: ${externalWeight.toFixed(2)}`);
-        console.log(`[Vocoder] External taps connected: Criosfera=${!!this.criosferaTap}, Gearheart=${!!this.gearheartTap}`);
     }
 
     /**
@@ -341,13 +320,10 @@ export class VocoderEngine extends AbstractSynthEngine {
         const ctx = this.getContext();
         if (!ctx || !this.micGain) return;
 
-        console.log(`[Vocoder] setMicEnabled called with: ${enabled}`);
-
         if (enabled) {
             // Request microphone access
             if (!this.micStream) {
                 try {
-                    console.log('[Vocoder] Requesting microphone access...');
                     this.micStream = await navigator.mediaDevices.getUserMedia({
                         audio: {
                             echoCancellation: true,
@@ -355,7 +331,6 @@ export class VocoderEngine extends AbstractSynthEngine {
                             autoGainControl: false
                         }
                     });
-                    console.log('[Vocoder] Microphone access granted');
                 } catch (err) {
                     console.error('[Vocoder] Error accessing microphone:', err);
                     return;
@@ -371,7 +346,6 @@ export class VocoderEngine extends AbstractSynthEngine {
                 this.modulatorBands.forEach(band => {
                     this.micGain!.connect(band);
                 });
-                console.log(`[Vocoder] Mic connected to ${this.modulatorBands.length} modulator bands`);
             }
 
             this.micStream.getAudioTracks().forEach(track => track.enabled = true);
@@ -381,9 +355,7 @@ export class VocoderEngine extends AbstractSynthEngine {
             this.createInternalCarrier();
 
             this.isMicActive = true;
-            console.log('[Vocoder] Mic now ACTIVE');
         } else {
-            console.log('[Vocoder] Deactivating mic...');
             // Stop carrier
             this.stopInternalCarrier();
 
@@ -399,7 +371,6 @@ export class VocoderEngine extends AbstractSynthEngine {
             }
             this.micStream = null;
             this.isMicActive = false;
-            console.log('[Vocoder] Mic now INactive');
         }
     }
 
@@ -418,12 +389,10 @@ export class VocoderEngine extends AbstractSynthEngine {
         const q = 1 + state.resonance * 10;
         this.carrierBands.forEach(band => {
             const freq = band.frequency.value;
-            const bandwidth = freq / q;
             band.Q.setTargetAtTime(q, t, 0.1);
         });
         this.modulatorBands.forEach(band => {
             const freq = band.frequency.value;
-            const bandwidth = freq / q;
             band.Q.setTargetAtTime(q, t, 0.1);
         });
 
@@ -478,6 +447,12 @@ export class VocoderEngine extends AbstractSynthEngine {
         // Stop and disconnect mic if active
         if (this.isMicActive) {
             this.setMicEnabled(false);
+        }
+
+        // Cancel envelope following animation loop
+        if (this.envelopeAnimationId !== null) {
+            cancelAnimationFrame(this.envelopeAnimationId);
+            this.envelopeAnimationId = null;
         }
 
         // Disconnect from external carrier sources

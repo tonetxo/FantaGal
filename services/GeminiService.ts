@@ -8,7 +8,6 @@ export async function fetchTitanCondition(prompt: string, apiKey: string): Promi
 
   const ai = new GoogleGenAI({ apiKey });
   try {
-    console.log("Enviando prompt a Gemini con modelo gemini-3-flash-preview...");
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: [{
@@ -41,7 +40,6 @@ export async function fetchTitanCondition(prompt: string, apiKey: string): Promi
         },
       },
     });
-    console.log("Resposta recibida:", response.text);
     return JSON.parse(response.text);
   } catch (e: any) {
     console.error("Erro detallado de Gemini:", e);

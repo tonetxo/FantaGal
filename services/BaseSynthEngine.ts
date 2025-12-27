@@ -6,4 +6,6 @@ export interface ISynthEngine {
   playNote(frequency: number, velocity?: number): number | undefined;
   stopNote(id: number): void;
   resume(): Promise<void>;
+  /** Optional cleanup method called when engine is deactivated */
+  reset?(): void;
 }

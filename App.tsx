@@ -90,7 +90,8 @@ function App() {
     toggleNote,
     generateAIPatch,
     setAiPrompt,
-    handleStart
+    handleStart,
+    restoreAudio
   } = useSynth('criosfera', apiKey);
 
   const [xyParams, setXyParams] = useState({
@@ -203,7 +204,6 @@ function App() {
           theme={theme}
           state={state}
           isActive={isCurrentActive}
-          handleStart={handleStart}
           updateParam={updateParam}
           labels={labels}
           aiPrompt={aiPrompt}
@@ -230,7 +230,6 @@ function App() {
               theme={theme}
               state={state}
               isActive={isCurrentActive}
-              handleStart={handleStart}
               updateParam={updateParam}
               labels={labels}
               aiPrompt={aiPrompt}
@@ -258,6 +257,13 @@ function App() {
             </h1>
           </button>
           <div className="flex gap-2 pointer-events-auto">
+            <button
+              onClick={restoreAudio}
+              className={`p-3 bg-black/40 border ${theme.border} rounded-full opacity-70 active:scale-95 transition-transform`}
+              title="Restaurar Audio"
+            >
+              🔊
+            </button>
             <button
               onClick={() => setIsSettingsOpen(true)}
               className={`p-3 bg-black/40 border ${theme.border} rounded-full opacity-70 active:scale-95 transition-transform`}
@@ -313,7 +319,7 @@ function App() {
                     yValue={state[xyParams.y]}
                     xLabel={labels[xyParams.x]}
                     yLabel={labels[xyParams.y]}
-                    onChange={(x, y) => updateParam(xyParams.x, x) || updateParam(xyParams.y, y)}
+                    onChange={(x, y) => { updateParam(xyParams.x, x); updateParam(xyParams.y, y); }}
                   />
                 </div>
                 <div className="w-full grid grid-cols-7 gap-2">

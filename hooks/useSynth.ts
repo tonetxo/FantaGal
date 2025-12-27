@@ -91,7 +91,7 @@ export const useSynth = (initialEngine: 'criosfera' | 'gearheart' | 'echo-vessel
             } else if (currentEngine === 'echo-vessel') {
                 const echoEngine = synthManager.getEchoVesselEngine();
                 if (echoEngine) {
-                    echoEngine.setMicEnabled(false);
+                    await echoEngine.setMicEnabled(false);
                     echoEngine.stopSpeech();
                 }
             } else if (currentEngine === 'vocoder') {
@@ -182,8 +182,8 @@ export const useSynth = (initialEngine: 'criosfera' | 'gearheart' | 'echo-vessel
             }
         } catch (err: any) {
             console.error("AI Patch Error:", err);
-            
-             // Provide more specific error messages
+
+            // Provide more specific error messages
             let errorMessage = "Erro descoñecido ao consultar o Oráculo.";
             const errMsg = err?.message?.toLowerCase() || '';
 
@@ -198,11 +198,15 @@ export const useSynth = (initialEngine: 'criosfera' | 'gearheart' | 'echo-vessel
             } else if (err?.message) {
                 errorMessage = `Erro: ${err.message}`;
             }
-            
+
             setTitanReport(errorMessage);
         } finally {
             setIsAiLoading(false);
         }
+    };
+
+    const restoreAudio = async () => {
+        await synthManager.restoreAudioVolume();
     };
 
     return {
@@ -220,6 +224,7 @@ export const useSynth = (initialEngine: 'criosfera' | 'gearheart' | 'echo-vessel
         generateAIPatch,
         setAiPrompt,
         setTitanReport,
-        handleStart
+        handleStart,
+        restoreAudio
     };
 };

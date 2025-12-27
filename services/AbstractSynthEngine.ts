@@ -35,7 +35,7 @@ export abstract class AbstractSynthEngine implements ISynthEngine {
    * Sets up the common master audio chain: masterGain -> compressor -> destination
    * Subclasses can override connectToDestination to use custom routing.
    */
-    private setupMasterChain(): void {
+    protected setupMasterChain(): void {
         if (!this.ctx) return;
 
         // Master gain
@@ -72,6 +72,24 @@ export abstract class AbstractSynthEngine implements ISynthEngine {
         if (this.ctx && this.ctx.state === 'suspended') {
             await this.ctx.resume();
         }
+    }
+
+    /**
+     * Reinitialize the engine with a new AudioContext without losing state.
+     * This is used to restore audio after Android communication mode.
+     */
+    reinitWithContext(ctx: AudioContext): void {
+        this.ctx = ctx;
+        this.setupMasterChain();
+        this.onContextReinit();
+    }
+
+    /**
+     * Called when context is reinitialized. Override in subclasses to reconnect audio nodes.
+     * Default implementation does nothing (state is preserved, only master chain is rebuilt).
+     */
+    protected onContextReinit(): void {
+        // Override in subclasses if specific reconnection is needed
     }
 
     /**

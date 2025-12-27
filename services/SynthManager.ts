@@ -85,8 +85,8 @@ class SynthManager {
 
     // Reset the previous engine if it has a reset method
     const previousEngine = this.engines.get(this.activeEngineName);
-    if (previousEngine && typeof (previousEngine as any).reset === 'function') {
-      (previousEngine as any).reset();
+    if (previousEngine?.reset) {
+      previousEngine.reset();
     }
 
     this.activeEngineName = engineName;
@@ -117,6 +117,13 @@ class SynthManager {
     // If not yet created, create it first
     this.getOrCreateEngine('vocoder');
     return this.engines.get('vocoder') as VocoderEngine | undefined;
+  }
+
+  /**
+   * Get an engine by name (for external access without type casting)
+   */
+  getEngine(name: string): ISynthEngine | undefined {
+    return this.engines.get(name);
   }
 
   getCurrentEngineName(): string {
@@ -180,8 +187,32 @@ class SynthManager {
     for (const engineName of oldEngines) {
       this.getOrCreateEngine(engineName);
     }
+  }
 
-    console.log("AudioContext reset completed");
+  /**
+   * Restore audio volume after Android communication mode
+   * Creates a new AudioContext and reinitializes engines without losing state
+   */
+  async restoreAudioVolume(): Promise<void> {
+    if (!this.ctx) return;
+
+    // Close the old context
+    await this.ctx.close();
+
+    // Create a new context
+    this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+
+    // Reinitialize Criosfera (it's simpler, doesn't hold complex state)
+    if (this.engines.has('criosfera')) {
+      this.engines.delete('criosfera');
+      this.getOrCreateEngine('criosfera');
+    }
+
+    // Reinitialize Gearheart with new context while preserving gear state
+    const gearheartEngine = this.engines.get('gearheart') as GearheartEngine | undefined;
+    if (gearheartEngine && (gearheartEngine as any).reinitWithContext) {
+      (gearheartEngine as any).reinitWithContext(this.ctx);
+    }
   }
 
   getAudioContext(): AudioContext | null {

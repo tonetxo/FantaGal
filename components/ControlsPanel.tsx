@@ -14,7 +14,6 @@ interface ControlsPanelProps {
   theme: Theme;
   state: SynthState;
   isActive: boolean;
-  handleStart: () => void;
   updateParam: (param: ParameterType, value: number) => void;
   labels: Record<string, string>;
   aiPrompt: string;

@@ -65,6 +65,26 @@ export class GearheartEngine extends AbstractSynthEngine {
   // --- Audio Setup ---
 
   protected initializeEngine(): void {
+    this.setupAudioNodes();
+    // Initialize gears and start physics loop
+    this.initGears();
+    this.startPhysicsLoop();
+  }
+
+  /**
+   * Reinitialize only audio nodes without resetting gear state.
+   * Called when AudioContext is recreated to restore volume on Android.
+   */
+  protected onContextReinit(): void {
+    this.setupAudioNodes();
+    // Don't call initGears() - preserve existing gear configuration
+    // Physics loop should continue running if it was
+  }
+
+  /**
+   * Setup audio nodes (shared between init and reinit)
+   */
+  private setupAudioNodes(): void {
     const ctx = this.getContext();
     const masterGain = this.getMasterGain();
     if (!ctx || !masterGain) return;
@@ -108,10 +128,6 @@ export class GearheartEngine extends AbstractSynthEngine {
     masterGain.connect(this.outputTap);
 
     this.compressor!.connect(ctx.destination);
-
-    // Initialize gears and start physics loop
-    this.initGears();
-    this.startPhysicsLoop();
   }
 
   private buildImpulse(): AudioBuffer | null {
