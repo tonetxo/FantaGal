@@ -83,12 +83,8 @@ class SynthManager {
       return;
     }
 
-    // Reset the previous engine if it has a reset method
-    const previousEngine = this.engines.get(this.activeEngineName);
-    if (previousEngine?.reset) {
-      previousEngine.reset();
-    }
-
+    // We no longer reset the previous engine automatically.
+    // The principle is that all engines keep sounding unless stopped explicitly.
     this.activeEngineName = engineName;
   }
 

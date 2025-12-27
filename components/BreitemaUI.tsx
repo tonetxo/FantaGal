@@ -24,6 +24,11 @@ const BreitemaUI: React.FC<BreitemaUIProps> = ({ isActive, theme }) => {
     const [probabilities, setProbabilities] = useState<number[]>(new Array(16).fill(0.5));
     const [rhythmMode, setRhythmMode] = useState<'libre' | 'muineira' | 'ribeirada'>('libre');
     const [isPlaying, setIsPlaying] = useState(false);
+    const [fogDensity, setFogDensity] = useState(0.5);
+    const [fogMovement, setFogMovement] = useState(0.2);
+    const [fmDepth, setFmDepth] = useState(100);
+    const [lastTriggerStep, setLastTriggerStep] = useState(-1);
+    const [interactFlash, setInteractFlash] = useState(0);
     const animationRef = useRef<number | null>(null);
 
     const engine = synthManager.getEngine('breitema') as BreitemaEngine | undefined;
@@ -38,6 +43,15 @@ const BreitemaUI: React.FC<BreitemaUIProps> = ({ isActive, theme }) => {
             setCurrentStep(state.currentStep);
             setProbabilities(state.probabilities);
             setIsPlaying(engine.isSequencerPlaying());
+            setFogDensity(state.fogDensity);
+            setFogMovement(state.fogMovement);
+            setFmDepth(state.fmDepth);
+
+            // Check if a note was just triggered (at the start of a step)
+            if (state.steps[state.currentStep] && state.currentStep !== lastTriggerStep) {
+                setLastTriggerStep(state.currentStep);
+            }
+
             animationRef.current = requestAnimationFrame(updateState);
         };
 
@@ -52,6 +66,8 @@ const BreitemaUI: React.FC<BreitemaUIProps> = ({ isActive, theme }) => {
     const toggleStep = (index: number) => {
         if (!engine) return;
         engine.toggleStep(index);
+        // Trigger a visual interaction flash
+        setInteractFlash(v => v + 1);
     };
 
     const handleRhythmModeChange = (mode: 'libre' | 'muineira' | 'ribeirada') => {
@@ -95,10 +111,56 @@ const BreitemaUI: React.FC<BreitemaUIProps> = ({ isActive, theme }) => {
 
             {/* Step Grid - Center with more space */}
             <div className="relative flex-1 flex items-center justify-center py-8">
-                {/* Fog overlay effect */}
-                <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/5 via-transparent to-cyan-500/5 pointer-events-none animate-pulse" />
+                {/* Fog overlay effect - Dynamic & Interactive */}
+                <div
+                    className="absolute inset-x-[-30%] inset-y-[-20%] pointer-events-none overflow-hidden blur-3xl transition-all duration-700"
+                    style={{
+                        opacity: fogDensity * (0.4 + (isPlaying && steps[currentStep] ? 0.4 : 0)),
+                        filter: `blur(${30 + fogDensity * 20}px) contrast(${1 + fogDensity})`,
+                    }}
+                >
+                    {/* Primary Fog Layer - Base Color */}
+                    <div
+                        className="absolute inset-0 transition-colors duration-1000"
+                        style={{
+                            background: `radial-gradient(circle at 50% 50%, 
+                                ${fmDepth > 250 ? 'rgba(255, 255, 255, 0.2)' : 'rgba(34, 211, 238, 0.2)'} 0%, 
+                                ${fmDepth > 400 ? 'rgba(168, 85, 247, 0.15)' : 'rgba(0, 255, 255, 0.1)'} 50%, 
+                                transparent 70%)`,
+                            animation: `fogMove ${10 / (0.1 + fogMovement)}s infinite alternate ease-in-out`
+                        }}
+                    />
 
-                <div className="grid grid-cols-4 gap-4 p-4 bg-black/30 rounded-lg border border-white/10">
+                    {/* Turbulence Layer - Reactive to movement */}
+                    <div
+                        className="absolute inset-0 opacity-50 transition-transform duration-500"
+                        style={{
+                            background: 'conic-gradient(from 0deg at 50% 50%, transparent, rgba(34, 211, 238, 0.1), transparent)',
+                            transform: `rotate(${currentStep * 22.5}deg) scale(${1 + fogMovement})`,
+                            animation: `fogSpin ${20 / (0.1 + fogMovement)}s infinite linear`
+                        }}
+                    />
+
+                    {/* Interaction Ripple/Flash */}
+                    <div
+                        key={interactFlash}
+                        className="absolute inset-0 bg-white/20 animate-ping opacity-0"
+                        style={{ animationIterationCount: 1, animationDuration: '0.8s' }}
+                    />
+                </div>
+
+                <style>{`
+                    @keyframes fogMove {
+                        0% { transform: translate(-10%, -5%) rotate(0deg) scale(1.1); }
+                        100% { transform: translate(10%, 10%) rotate(8deg) scale(1.3); }
+                    }
+                    @keyframes fogSpin {
+                        from { transform: rotate(0deg) scale(1.2); }
+                        to { transform: rotate(360deg) scale(1.2); }
+                    }
+                `}</style>
+
+                <div className="grid grid-cols-4 gap-4 p-4 bg-black/40 rounded-lg border border-white/10 relative z-10 shadow-[0_0_50px_rgba(0,0,0,0.5)]">
                     {steps.map((active, index) => {
                         const isCurrent = index === currentStep && isPlaying;
                         const prob = probabilities[index];

@@ -180,12 +180,20 @@ export class BreitemaEngine extends AbstractSynthEngine {
         const ctx = this.getContext();
         if (!ctx || !this.filter) return;
 
-        // Calculate probability with fog modulation
-        let prob = this.stepProbabilities[step] * this.fogDensity;
-        prob += (Math.sin(time * this.fogMovement * Math.PI) * 0.2);
-        prob = Math.max(0, Math.min(1, prob));
+        // Base probability is the step's own probability
+        const baseProb = this.stepProbabilities[step];
 
-        // Probabilistic trigger
+        // Fog density clears the fog: mapping viscosity so that at 1.0, prob is 1.0
+        // We use fogDensity which is updated in updateParameters (0.2 to 1.0)
+        let prob = baseProb + (1 - baseProb) * (this.fogDensity - 0.2) / 0.8;
+
+        // Add periodic modulation (fog movement)
+        prob += (Math.sin(time * this.fogMovement * Math.PI) * 0.15);
+
+        // Clamp to [0.05, 1.0] so active steps have at least a small chance or full certainty
+        prob = Math.max(0.05, Math.min(1, prob));
+
+        // Probabilistic trigger: if step is active and passes random check
         if (this.steps[step] && Math.random() < prob) {
             this.playFMNote(time, step);
         }
@@ -271,11 +279,14 @@ export class BreitemaEngine extends AbstractSynthEngine {
     /**
      * Get current sequencer state for UI
      */
-    getSequencerState(): { steps: boolean[], currentStep: number, probabilities: number[] } {
+    getSequencerState(): { steps: boolean[], currentStep: number, probabilities: number[], fogDensity: number, fogMovement: number, fmDepth: number } {
         return {
             steps: [...this.steps],
             currentStep: this.currentStep,
-            probabilities: [...this.stepProbabilities]
+            probabilities: [...this.stepProbabilities],
+            fogDensity: this.fogDensity,
+            fogMovement: this.fogMovement,
+            fmDepth: this.fmDepth
         };
     }
 
