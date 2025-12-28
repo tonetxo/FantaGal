@@ -517,29 +517,25 @@ export class VocoderEngine extends AbstractSynthEngine {
         this.dryGain?.gain.setTargetAtTime((1 - wet) * 1.2, t, 0.1);  // Slightly boosted dry
 
         // Resonance -> Band resonance (Q value)
-        const q = 1 + state.resonance * 10;
-        this.carrierBands.forEach(band => {
-            const freq = band.frequency.value;
+        // Reduce the maximum Q to prevent excessive resonance that might interfere with modulation
+        const q = 0.7 + state.resonance * 5; // Reduced range to prevent harsh resonances
+        this.carrierBands.forEach((band, index) => {
+            // Also update the frequency slightly based on turbulence for formant shifting
+            const baseFreq = 80 * Math.pow(100, index / this.NUM_BANDS); // Same as in createVocoderBands
+            const shift = 1 + (state.turbulence - 0.5) * 0.3; // Reduced formant shift
+            band.frequency.setTargetAtTime(baseFreq * shift, t, 0.1);
             band.Q.setTargetAtTime(q, t, 0.1);
         });
-        this.modulatorBands.forEach(band => {
-            const freq = band.frequency.value;
+        this.modulatorBands.forEach((band, index) => {
+            // Also update the frequency slightly based on turbulence for formant shifting
+            const baseFreq = 80 * Math.pow(100, index / this.NUM_BANDS); // Same as in createVocoderBands
+            const shift = 1 + (state.turbulence - 0.5) * 0.3; // Reduced formant shift
+            band.frequency.setTargetAtTime(baseFreq * shift, t, 0.1);
             band.Q.setTargetAtTime(q, t, 0.1);
         });
 
         // Viscosity -> Carrier balance (Criosfera ↔ Gearheart)
         this.carrierBalance = state.viscosity;
-
-        // Turbulence -> Formant shift (shift all band frequencies)
-        const shift = 1 + (state.turbulence - 0.5) * 0.5; // ±25%
-        this.carrierBands.forEach((band, i) => {
-            const baseFreq = 100 * Math.pow(100, i / this.NUM_BANDS);
-            band.frequency.setTargetAtTime(baseFreq * shift, t, 0.1);
-        });
-        this.modulatorBands.forEach((band, i) => {
-            const baseFreq = 100 * Math.pow(100, i / this.NUM_BANDS);
-            band.frequency.setTargetAtTime(baseFreq * shift, t, 0.1);
-        });
 
         // Diffusion -> Reverb mix (via master gain to reverb)
         // This is tricky - we need to adjust the reverb contribution
