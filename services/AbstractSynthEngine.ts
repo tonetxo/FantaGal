@@ -10,6 +10,7 @@ export abstract class AbstractSynthEngine implements ISynthEngine {
     protected ctx: AudioContext | null = null;
     protected masterGain: GainNode | null = null;
     protected compressor: DynamicsCompressorNode | null = null;
+    protected masterBus: GainNode | null = null;
     protected isInitialized = false;
 
     // Compressor settings (can be overridden by subclasses)
@@ -23,10 +24,10 @@ export abstract class AbstractSynthEngine implements ISynthEngine {
      * Initialize the engine with an AudioContext.
      * Sets up the common master chain and calls initializeEngine() for subclass-specific setup.
      */
-    init(ctx: AudioContext): void {
+    init(ctx: AudioContext, masterBus?: GainNode): void {
         if (this.isInitialized) return;
         this.ctx = ctx;
-        this.setupMasterChain();
+        this.setupMasterChain(masterBus);
         this.initializeEngine();
         this.isInitialized = true;
     }
@@ -35,12 +36,13 @@ export abstract class AbstractSynthEngine implements ISynthEngine {
    * Sets up the common master audio chain: masterGain -> compressor -> destination
    * Subclasses can override connectToDestination to use custom routing.
    */
-    protected setupMasterChain(): void {
+    protected setupMasterChain(masterBus?: GainNode): void {
         if (!this.ctx) return;
 
         // Master gain
         this.masterGain = this.ctx.createGain();
         this.masterGain.gain.value = 0.7;
+        this.masterBus = masterBus || null;
 
         // Dynamics compressor for consistent output
         this.compressor = this.ctx.createDynamicsCompressor();
@@ -50,10 +52,16 @@ export abstract class AbstractSynthEngine implements ISynthEngine {
         this.compressor.attack.value = this.compressorAttack;
         this.compressor.release.value = this.compressorRelease;
 
-        // Default connection - subclasses can override by not calling super or using custom chain
+        // Default connection - engines now connect to the provided master bus
         if (this.useDefaultRouting()) {
-            this.masterGain.connect(this.compressor);
-            this.compressor.connect(this.ctx.destination);
+            if (masterBus) {
+                this.masterGain.connect(this.compressor);
+                this.compressor.connect(masterBus);
+            } else {
+                // Fallback to destination if master bus is not available
+                this.masterGain.connect(this.compressor);
+                this.compressor.connect(this.ctx.destination);
+            }
         }
     }
 
@@ -78,9 +86,9 @@ export abstract class AbstractSynthEngine implements ISynthEngine {
      * Reinitialize the engine with a new AudioContext without losing state.
      * This is used to restore audio after Android communication mode.
      */
-    reinitWithContext(ctx: AudioContext): void {
+    reinitWithContext(ctx: AudioContext, masterBus?: GainNode): void {
         this.ctx = ctx;
-        this.setupMasterChain();
+        this.setupMasterChain(masterBus);
         this.onContextReinit();
     }
 

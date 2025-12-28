@@ -95,7 +95,12 @@ export class EchoVesselEngine extends AbstractSynthEngine {
         this.wetGain.connect(this.panner);
         this.panner.connect(masterGain);
         masterGain.connect(this.analyser);
-        this.analyser.connect(ctx.destination);
+        // Connect to masterBus for consistent architecture
+        if (this.masterBus) {
+            this.analyser.connect(this.masterBus);
+        } else {
+            this.analyser.connect(ctx.destination);
+        }
 
         // Initialize Effects
         this.setupDelay();

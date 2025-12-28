@@ -91,10 +91,13 @@ export class VocoderEngine extends AbstractSynthEngine {
         // Connect dry path
         this.dryGain.connect(masterGain);
 
-        // Connect master to analyser and compressor
+        // Connect master to analyser and then to masterBus (no internal compressor)
         masterGain.connect(this.outputAnalyser);
-        this.outputAnalyser.connect(this.compressor!);
-        this.compressor!.connect(ctx.destination);
+        if (this.masterBus) {
+            this.outputAnalyser.connect(this.masterBus);
+        } else {
+            this.outputAnalyser.connect(ctx.destination);
+        }
     }
 
     private createInternalCarrier(): void {

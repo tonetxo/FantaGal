@@ -1,4 +1,3 @@
-
 import { SynthState } from '../../types';
 import { AbstractSynthEngine } from '../AbstractSynthEngine';
 import { makeDistortionCurve, createReverbImpulse, createNoiseBuffer } from '../audioUtils';
@@ -41,8 +40,8 @@ export class CriosferaEngine extends AbstractSynthEngine {
     const masterGain = this.getMasterGain();
     if (!ctx || !masterGain) return;
 
-    // Set custom master gain
-    masterGain.gain.value = 0.8;
+    // Set custom master gain - boosted from 0.8
+    masterGain.gain.value = 1.0;
 
     this.noiseBuffer = createNoiseBuffer(ctx, 2);
 
@@ -73,19 +72,32 @@ export class CriosferaEngine extends AbstractSynthEngine {
     this.lfoDelayGain = ctx.createGain();
     this.lfoDelayGain.gain.value = 0;
 
-    // Custom audio routing: masterGain -> distortion -> lowPass -> {compressor, reverb, delay}
+    // Connect main chain: masterGain -> distortion -> lowPass -> Global Master Bus
+    // NOTE: No internal compressor - we use the global masterLimiter only
     masterGain.connect(this.distortion);
     this.distortion.connect(this.lowPass);
 
-    this.lowPass.connect(this.compressor!);
-    this.lowPass.connect(this.reverb);
-    this.lowPass.connect(this.delay);
+    if (this.masterBus) {
+      this.lowPass.connect(this.masterBus);
+    } else {
+      this.lowPass.connect(ctx.destination);
+    }
 
-    this.delay.connect(this.delayFeedback);
-    this.delayFeedback.connect(this.delay);
-    this.delay.connect(this.compressor!);
+    // Connect reverb and delay in parallel to masterBus
+    this.lowPass.connect(this.reverb!);
+    this.lowPass.connect(this.delay!);
 
-    this.reverb.connect(this.compressor!);
+    this.delay!.connect(this.delayFeedback!);
+    this.delayFeedback!.connect(this.delay!);
+
+    // Route effects to masterBus (not the removed compressor)
+    if (this.masterBus) {
+      this.delay!.connect(this.masterBus);
+      this.reverb!.connect(this.masterBus);
+    } else {
+      this.delay!.connect(ctx.destination);
+      this.reverb!.connect(ctx.destination);
+    }
 
     // Create output tap for vocoder (pre-compressor)
     this.outputTap = ctx.createGain();
@@ -94,8 +106,6 @@ export class CriosferaEngine extends AbstractSynthEngine {
     this.lowPass.connect(this.outputTap);
     // The outputTap itself should not connect to ctx.destination directly,
     // but rather be available for external connections (e.g., vocoder)
-
-    this.compressor!.connect(ctx.destination);
 
     this.lfo.connect(this.lfoFilterGain);
     this.lfoFilterGain.connect(this.lowPass.frequency);
@@ -114,7 +124,7 @@ export class CriosferaEngine extends AbstractSynthEngine {
     this.currentState = state;
     const timeConstant = 0.2;
 
-    const targetGain = 0.2 + (state.pressure * 0.6);
+    const targetGain = 0.3 + (state.pressure * 0.7); // Boosted from 0.2 + 0.6
     masterGain.gain.setTargetAtTime(targetGain, ctx.currentTime, timeConstant);
 
     if (this.lfo && this.lfoFilterGain && this.lfoDelayGain) {
@@ -180,25 +190,25 @@ export class CriosferaEngine extends AbstractSynthEngine {
     const gain = ctx.createGain();
     gain.gain.value = 0;
     gain.gain.setValueAtTime(0, t);
-    // Faster attack to avoid slow fade-in, but still smooth
-    gain.gain.linearRampToValueAtTime(velocity * 0.6, t + 0.02);
+    // Smooth attack ramp to avoid clicks (increased to 0.05 for "organic" feel and safety)
+    gain.gain.linearRampToValueAtTime(velocity * 0.8, t + 0.05); // Boosted from 0.6
 
     // Start oscillator gains at 0 and ramp up to avoid clicks
     // Less tonal: oscillators reduced, noise boosted for atmospheric sound
     const osc1Gain = ctx.createGain();
     osc1Gain.gain.value = 0;
     osc1Gain.gain.setValueAtTime(0, t);
-    osc1Gain.gain.linearRampToValueAtTime(0.08, t + 0.01); // Reduced for less fundamental
+    osc1Gain.gain.linearRampToValueAtTime(0.12, t + 0.05); // Boosted from 0.08
 
     const osc2Gain = ctx.createGain();
     osc2Gain.gain.value = 0;
     osc2Gain.gain.setValueAtTime(0, t);
-    osc2Gain.gain.linearRampToValueAtTime(0.06, t + 0.01); // Reduced for less definition
+    osc2Gain.gain.linearRampToValueAtTime(0.09, t + 0.05); // Boosted from 0.06
 
     const noiseGain = ctx.createGain();
     noiseGain.gain.value = 0;
     noiseGain.gain.setValueAtTime(0, t);
-    noiseGain.gain.linearRampToValueAtTime(0.7, t + 0.01); // Boosted for more texture
+    noiseGain.gain.linearRampToValueAtTime(0.8, t + 0.05); // Boosted from 0.7
 
     osc1.connect(toneHighPass);
     osc2.connect(toneHighPass);

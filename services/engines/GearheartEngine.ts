@@ -1,7 +1,6 @@
-
 import { SynthState } from '../../types';
 import { AbstractSynthEngine } from '../AbstractSynthEngine';
-import { makeSoftDistortionCurve, createReverbImpulse, createNoiseBuffer } from '../audioUtils';
+import { makeDistortionCurve, createReverbImpulse, createNoiseBuffer } from '../audioUtils';
 
 // Physics constants
 const GEAR_CONNECTION_MARGIN_PX = 18;        // Margin for gear connection detection
@@ -89,13 +88,10 @@ export class GearheartEngine extends AbstractSynthEngine {
     const masterGain = this.getMasterGain();
     if (!ctx || !masterGain) return;
 
-    // Set custom master gain
-    masterGain.gain.value = 0.5;
+    // Set custom master gain - MUCH HIGHER for Gearheart
+    masterGain.gain.value = 4.0; // Was 2.0, before that 1.0
 
-    // Custom compressor settings for percussion
-    this.compressor!.threshold.value = -10;
-    this.compressor!.ratio.value = 4;
-    this.compressor!.knee.value = 10;
+    // NOTE: No internal compressor - we use the global masterLimiter only
 
     // Reverb Setup
     this.reverb = ctx.createConvolver();
@@ -103,31 +99,41 @@ export class GearheartEngine extends AbstractSynthEngine {
     this.reverbGain = ctx.createGain();
     this.reverbGain.gain.value = 0;
 
-    // Percussion Filter
+    // Percussion Filter - high cutoff to preserve brightness
     this.percussionFilter = ctx.createBiquadFilter();
     this.percussionFilter.type = 'lowpass';
-    this.percussionFilter.frequency.value = 2000;
-    this.percussionFilter.Q.value = 2;
+    this.percussionFilter.frequency.value = 8000; // Was 2000
+    this.percussionFilter.Q.value = 0.7; // Was 2
 
     // Distortion for percussive sound
     this.distortion = ctx.createWaveShaper();
-    this.distortion.curve = makeSoftDistortionCurve(0.05);
+    this.distortion.curve = makeDistortionCurve(0.05);
 
-    // Custom routing: masterGain -> distortion -> percussionFilter -> {compressor, reverb}
-    masterGain.connect(this.distortion);
-    this.distortion.connect(this.percussionFilter);
+    // Simplified routing: masterGain -> percussionFilter -> masterBus
+    // (skip distortion to preserve volume)
+    masterGain.connect(this.percussionFilter);
 
-    this.percussionFilter.connect(this.compressor!); // Dry
+    // Connect directly to masterBus
+    if (this.masterBus) {
+      console.log('[Gearheart] Connected to masterBus');
+      this.percussionFilter.connect(this.masterBus);
+    } else {
+      console.warn('[Gearheart] masterBus is NULL - connecting to destination');
+      this.percussionFilter.connect(ctx.destination);
+    }
+
     this.percussionFilter.connect(this.reverb);       // Wet Send
     this.reverb.connect(this.reverbGain);
-    this.reverbGain.connect(this.compressor!);
+    if (this.masterBus) {
+      this.reverbGain.connect(this.masterBus);
+    } else {
+      this.reverbGain.connect(ctx.destination);
+    }
 
     // Create output tap for vocoder
     this.outputTap = ctx.createGain();
     this.outputTap.gain.value = 1.0;
     masterGain.connect(this.outputTap);
-
-    this.compressor!.connect(ctx.destination);
   }
 
   private buildImpulse(): AudioBuffer | null {
@@ -463,7 +469,7 @@ export class GearheartEngine extends AbstractSynthEngine {
     const env = this.ctx.createGain();
     // Start from 0 and ramp up to avoid click
     env.gain.setValueAtTime(0, now);
-    env.gain.linearRampToValueAtTime(0.3 * volume, now + 0.003);
+    env.gain.linearRampToValueAtTime(2.0 * volume, now + 0.003); // Was 0.3
     env.gain.exponentialRampToValueAtTime(0.001, now + duration);
 
     noise.connect(filter);
@@ -492,7 +498,7 @@ export class GearheartEngine extends AbstractSynthEngine {
 
     const noiseEnv = this.ctx.createGain();
     noiseEnv.gain.setValueAtTime(0, now);
-    noiseEnv.gain.linearRampToValueAtTime(0.04 * volume, now + 0.02); // Bajado de 0.07 a 0.04
+    noiseEnv.gain.linearRampToValueAtTime(0.4 * volume, now + 0.02); // Was 0.04
     noiseEnv.gain.exponentialRampToValueAtTime(0.001, now + duration);
 
     // Body component (tonal part of the snare) - Shortened to a snap
@@ -503,7 +509,7 @@ export class GearheartEngine extends AbstractSynthEngine {
 
     const bodyEnv = this.ctx.createGain();
     bodyEnv.gain.setValueAtTime(0, now);
-    bodyEnv.gain.linearRampToValueAtTime(0.03 * volume, now + 0.003); // Bajado de 0.07 a 0.03
+    bodyEnv.gain.linearRampToValueAtTime(0.3 * volume, now + 0.003); // Was 0.03
     bodyEnv.gain.exponentialRampToValueAtTime(0.001, now + 0.05); // Shortened duration to 0.05s
 
     // High pass filter to ensure no unwanted low frequency remains
@@ -579,16 +585,16 @@ export class GearheartEngine extends AbstractSynthEngine {
     clickOsc.frequency.setValueAtTime(150, now);
     clickOsc.frequency.exponentialRampToValueAtTime(40, now + 0.03);
 
-    // Sub envelope - with ramp to avoid click
+    // Sub envelope - MAXIMUM volume for powerful kick
     const subEnv = this.ctx.createGain();
     subEnv.gain.setValueAtTime(0, now);
-    subEnv.gain.linearRampToValueAtTime(1.0, now + 0.003);
+    subEnv.gain.linearRampToValueAtTime(8.0, now + 0.003); // Was 5.0
     subEnv.gain.exponentialRampToValueAtTime(0.001, now + decay);
 
-    // Click envelope - with ramp to avoid click
+    // Click envelope - MAXIMUM volume
     const clickEnv = this.ctx.createGain();
     clickEnv.gain.setValueAtTime(0, now);
-    clickEnv.gain.linearRampToValueAtTime(0.6, now + 0.002);
+    clickEnv.gain.linearRampToValueAtTime(5.0, now + 0.002); // Was 3.0
     clickEnv.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
 
     // Connect through masterGain (original routing)
@@ -624,7 +630,7 @@ export class GearheartEngine extends AbstractSynthEngine {
     // Dynamic volume: steep drop for higher frequencies
     // This makes small toms much quieter as requested
     const freqFactor = Math.max(0, 1 - (frequency / 500));
-    const baseVol = 0.1 + (freqFactor * 0.5); // Ranges from ~0.1 (highs) to 0.6 (lows)
+    const baseVol = 1.0 + (freqFactor * 2.0); // Was 0.3 + 1.0; now ranges from 1.0 to 3.0
 
     // Main envelope - start from 0 to avoid click
     const env = ctx.createGain();

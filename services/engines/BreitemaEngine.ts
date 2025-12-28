@@ -70,7 +70,7 @@ export class BreitemaEngine extends AbstractSynthEngine {
         const masterGain = this.getMasterGain();
         if (!ctx || !masterGain) return;
 
-        masterGain.gain.value = 0.6;
+        masterGain.gain.value = 0.8; // Boosted from 0.6
 
         // Filter
         this.filter = ctx.createBiquadFilter();
@@ -105,8 +105,12 @@ export class BreitemaEngine extends AbstractSynthEngine {
         this.dryGain.connect(masterGain);
         this.reverbGain.connect(masterGain);
 
-        masterGain.connect(this.compressor!);
-        this.compressor!.connect(ctx.destination);
+        // NOTE: No internal compressor - we use the global masterLimiter only
+        if (this.masterBus) {
+            masterGain.connect(this.masterBus);
+        } else {
+            masterGain.connect(ctx.destination);
+        }
 
         // Initialize random step pattern
         this.generateRandomPattern();
@@ -234,11 +238,12 @@ export class BreitemaEngine extends AbstractSynthEngine {
         // Envelope
         const duration = 60 / this.tempo / 2; // Half step duration
         noteGain.gain.setValueAtTime(0, time);
-        noteGain.gain.linearRampToValueAtTime(0.4, time + 0.01);
+        // Smoother attack ramp (5ms) to kill clicks
+        noteGain.gain.linearRampToValueAtTime(0.4, time + 0.005);
         noteGain.gain.exponentialRampToValueAtTime(0.01, time + duration);
 
-        // Filter envelope
-        this.filter.frequency.setValueAtTime(2000, time);
+        // Filter envelope with smooth start
+        this.filter.frequency.setTargetAtTime(2000, time, 0.01); // Smoothed from setValueAtTime
         this.filter.frequency.exponentialRampToValueAtTime(400, time + duration);
 
         // Start and stop

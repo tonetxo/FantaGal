@@ -12,6 +12,8 @@ class SynthManager {
   private activeEngineName: string = 'criosfera';
   private engines: Map<string, ISynthEngine> = new Map();
   private ctx: AudioContext | null = null;
+  private masterGain: GainNode | null = null;
+  private masterLimiter: DynamicsCompressorNode | null = null;
 
   constructor() {
     // Don't create any engines in constructor - lazy creation only
@@ -27,25 +29,49 @@ class SynthManager {
       engine = engineRegistry.createEngine(name);
       if (engine) {
         this.engines.set(name, engine);
-
-        // Initialize if AudioContext already exists
-        if (this.ctx) {
-          engine.init(this.ctx);
-        }
       } else {
         console.warn(`Engine "${name}" not found in registry`);
       }
     }
+
+    // Always ensure engine is initialized if context exists
+    // (init() has early return if already initialized, so this is safe)
+    if (engine && this.ctx) {
+      engine.init(this.ctx, this.masterGain || undefined);
+    }
+
     return engine;
   }
 
   async init() {
     if (!this.ctx) {
-      this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)({
+        latencyHint: 'interactive'
+      });
     }
+
+    this.setupMasterBus();
 
     // Only create and initialize the active engine
     this.getOrCreateEngine(this.activeEngineName);
+  }
+
+  private setupMasterBus() {
+    if (!this.ctx) return;
+
+    // Create master nodes on the CURRENT context
+    this.masterGain = this.ctx.createGain();
+    this.masterGain.gain.value = 0.8; // Safe default headroom
+
+    this.masterLimiter = this.ctx.createDynamicsCompressor();
+    this.masterLimiter.threshold.value = -1.0; // Prevent clipping
+    this.masterLimiter.knee.value = 10;
+    this.masterLimiter.ratio.value = 20;
+    this.masterLimiter.attack.value = 0.002;
+    this.masterLimiter.release.value = 0.1;
+
+    this.masterGain.connect(this.masterLimiter);
+    this.masterLimiter.connect(this.ctx.destination);
   }
 
   updateParameters(state: SynthState) {
@@ -86,12 +112,17 @@ class SynthManager {
     // We no longer reset the previous engine automatically.
     // The principle is that all engines keep sounding unless stopped explicitly.
     this.activeEngineName = engineName;
+
+    // Ensure the engine is created and initialized
+    this.getOrCreateEngine(engineName);
   }
 
   /**
    * Get typed access to Gearheart engine (for engine-specific methods)
    */
   getGearheartEngine(): GearheartEngine | undefined {
+    // Ensure the engine is created if it doesn't exist yet
+    this.getOrCreateEngine('gearheart');
     return this.engines.get('gearheart') as GearheartEngine | undefined;
   }
 
@@ -176,6 +207,9 @@ class SynthManager {
     // Create a new context
     this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
 
+    // RECREATE master bus on the new context
+    this.setupMasterBus();
+
     // Re-initialize all existing engines with the new context
     const oldEngines = Array.from(this.engines.keys());
     this.engines.clear();
@@ -198,6 +232,9 @@ class SynthManager {
     // Create a new context
     this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
 
+    // RECREATE master bus on the new context
+    this.setupMasterBus();
+
     // Reinitialize Criosfera (it's simpler, doesn't hold complex state)
     if (this.engines.has('criosfera')) {
       this.engines.delete('criosfera');
@@ -207,12 +244,20 @@ class SynthManager {
     // Reinitialize Gearheart with new context while preserving gear state
     const gearheartEngine = this.engines.get('gearheart') as GearheartEngine | undefined;
     if (gearheartEngine && (gearheartEngine as any).reinitWithContext) {
-      (gearheartEngine as any).reinitWithContext(this.ctx);
+      (gearheartEngine as any).reinitWithContext(this.ctx, this.masterGain || undefined);
     }
   }
 
   getAudioContext(): AudioContext | null {
     return this.ctx;
+  }
+
+  /**
+   * Get the global master bus for all engines to connect to.
+   * This ensures centralized volume control and limiting.
+   */
+  getMasterBus(): GainNode | null {
+    return this.masterGain;
   }
 }
 
