@@ -172,7 +172,7 @@ const VocoderUI: React.FC<VocoderUIProps> = ({ isActive, engine }) => {
 
                     // Inner glow
                     ctx.beginPath();
-                    ctx.arc(cx, cy, radius - 2, 0, Math.PI * 2);
+                    ctx.arc(cx, cy, Math.max(0.1, radius - 2), 0, Math.PI * 2);
                     ctx.strokeStyle = `rgba(50, 200, 150, ${intensity * 0.2})`;
                     ctx.lineWidth = 1;
                     ctx.stroke();
@@ -260,11 +260,12 @@ const VocoderUI: React.FC<VocoderUIProps> = ({ isActive, engine }) => {
                     continue;
                 }
 
-                // 3D projection (simple perspective)
-                const scale = 200 / (200 + p.z);
+                // 3D projection (simple perspective) - clamp z to prevent negative scale
+                const safeZ = Math.max(p.z, -180); // Prevent z from making scale negative
+                const scale = 200 / (200 + safeZ);
                 const screenX = p.x * scale + (1 - scale) * w / 2;
                 const screenY = p.y * scale + (1 - scale) * h / 2;
-                const screenSize = p.size * scale;
+                const screenSize = Math.max(0.1, p.size * scale); // Ensure positive size
 
                 // Draw particle
                 const alpha = p.life * 0.8;
@@ -341,10 +342,10 @@ const VocoderUI: React.FC<VocoderUIProps> = ({ isActive, engine }) => {
                     <button
                         onClick={toggleMic}
                         className={`w-20 h-20 rounded-full border-2 flex items-center justify-center transition-all ${status === 'recording'
-                                ? 'border-red-500 bg-red-900/30 text-red-500 shadow-[0_0_20px_rgba(239,68,68,0.4)] animate-pulse'
-                                : status === 'playing'
-                                    ? 'border-emerald-500 bg-emerald-900/30 text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.4)]'
-                                    : 'border-emerald-800 text-emerald-700 bg-black/40 backdrop-blur-sm'
+                            ? 'border-red-500 bg-red-900/30 text-red-500 shadow-[0_0_20px_rgba(239,68,68,0.4)] animate-pulse'
+                            : status === 'playing'
+                                ? 'border-emerald-500 bg-emerald-900/30 text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.4)]'
+                                : 'border-emerald-800 text-emerald-700 bg-black/40 backdrop-blur-sm'
                             }`}
                     >
                         <span className="text-3xl">

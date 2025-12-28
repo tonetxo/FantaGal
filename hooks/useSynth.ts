@@ -213,14 +213,11 @@ export const useSynth = (initialEngine: EngineName, apiKeyProp: string) => {
         }
     };
 
-    const restoreAudio = async () => {
-        await synthManager.restoreAudioVolume();
-    };
-
     return {
         currentEngine,
         state,
         isCurrentActive,
+        initializedEngines,
         aiPrompt,
         titanReport,
         isAiLoading,
@@ -232,7 +229,6 @@ export const useSynth = (initialEngine: EngineName, apiKeyProp: string) => {
         generateAIPatch,
         setAiPrompt,
         setTitanReport,
-        handleStart,
-        restoreAudio
+        handleStart
     };
 };

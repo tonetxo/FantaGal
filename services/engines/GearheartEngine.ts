@@ -65,9 +65,9 @@ export class GearheartEngine extends AbstractSynthEngine {
 
   protected initializeEngine(): void {
     this.setupAudioNodes();
-    // Initialize gears and start physics loop
+    // Initialize gears but DON'T start physics loop
+    // Physics loop is started only when user activates the engine via toggleEngine()
     this.initGears();
-    this.startPhysicsLoop();
   }
 
   /**

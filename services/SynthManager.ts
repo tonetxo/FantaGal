@@ -234,34 +234,7 @@ class SynthManager {
     }
   }
 
-  /**
-   * Restore audio volume after Android communication mode
-   * Creates a new AudioContext and reinitializes engines without losing state
-   */
-  async restoreAudioVolume(): Promise<void> {
-    if (!this.ctx) return;
 
-    // Close the old context
-    await this.ctx.close();
-
-    // Create a new context
-    this.ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-
-    // RECREATE master bus on the new context
-    this.setupMasterBus();
-
-    // Reinitialize Criosfera (it's simpler, doesn't hold complex state)
-    if (this.engines.has('criosfera')) {
-      this.engines.delete('criosfera');
-      this.getOrCreateEngine('criosfera');
-    }
-
-    // Reinitialize Gearheart with new context while preserving gear state
-    const gearheartEngine = this.engines.get('gearheart') as GearheartEngine | undefined;
-    if (gearheartEngine && (gearheartEngine as any).reinitWithContext) {
-      (gearheartEngine as any).reinitWithContext(this.ctx, this.masterGain || undefined);
-    }
-  }
 
   getAudioContext(): AudioContext | null {
     return this.ctx;

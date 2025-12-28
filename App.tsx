@@ -53,7 +53,7 @@ function App() {
     generateAIPatch,
     setAiPrompt,
     handleStart,
-    restoreAudio
+    initializedEngines
   } = useSynth('criosfera', apiKey);
 
   const [xyParams, setXyParams] = useState({
@@ -93,19 +93,25 @@ function App() {
     setIsSettingsOpen(false);
   };
 
-  // Connect engine audio taps to vocoder when vocoder is active
+  // Connect engine audio taps to vocoder when vocoder is active OR when carrier engines change
   useEffect(() => {
-    if (currentEngine !== 'vocoder' || !isCurrentActive) return;
+    // Only run if vocoder is active
+    if (!initializedEngines.has('vocoder')) return;
 
     const vocoderEngine = synthManager.getVocoderEngine();
     if (!vocoderEngine) return;
 
-    const criosferaTap = synthManager.getEngineTap('criosfera');
-    const gearheartTap = synthManager.getEngineTap('gearheart');
+    // Get taps from active engines
+    const criosferaTap = initializedEngines.has('criosfera')
+      ? synthManager.getEngineTap('criosfera')
+      : null;
+    const gearheartTap = initializedEngines.has('gearheart')
+      ? synthManager.getEngineTap('gearheart')
+      : null;
 
     vocoderEngine.setCarrierSources(criosferaTap, gearheartTap);
-    console.log('[App] Connected engine taps to vocoder carrier');
-  }, [currentEngine, isCurrentActive]);
+    console.log('[App] Connected engine taps to vocoder carrier - criosfera:', !!criosferaTap, 'gearheart:', !!gearheartTap);
+  }, [initializedEngines]);
 
   return (
     <div className={`relative w-full h-screen flex flex-col md:flex-row overflow-hidden transition-colors duration-500 pt-12 ${theme.bg} ${theme.text}`}>
@@ -191,13 +197,6 @@ function App() {
             </h1>
           </button>
           <div className="flex gap-2 pointer-events-auto">
-            <button
-              onClick={restoreAudio}
-              className={`p-3 bg-black/40 border ${theme.border} rounded-full opacity-70 active:scale-95 transition-transform`}
-              title="Restaurar Audio"
-            >
-              🔊
-            </button>
             <button
               onClick={() => setIsSettingsOpen(true)}
               className={`p-3 bg-black/40 border ${theme.border} rounded-full opacity-70 active:scale-95 transition-transform`}

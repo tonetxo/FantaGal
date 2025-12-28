@@ -52,23 +52,23 @@ export class VocoderEngine extends AbstractSynthEngine {
         const masterGain = this.getMasterGain();
         if (!ctx || !masterGain) return;
 
-        masterGain.gain.value = 0.7;
+        masterGain.gain.value = 1.5; // Increased for vocoder audibility
 
         // Create gain nodes
         this.micGain = ctx.createGain();
-        this.micGain.gain.value = 8.0; // Higher gain for more sensitive microphone input
+        this.micGain.gain.value = 12.0; // Higher gain for recorded audio normalization
 
         this.carrierGain = ctx.createGain();
         this.carrierGain.gain.value = 1.0;
 
         this.internalCarrierGain = ctx.createGain();
-        this.internalCarrierGain.gain.value = 0.1; // Reduced further to balance with microphone
+        this.internalCarrierGain.gain.value = 0.4; // Increased carrier level for audibility
 
         this.dryGain = ctx.createGain();
-        this.dryGain.gain.value = 0.1; // Low dry for clear vocoder effect
+        this.dryGain.gain.value = 2.0; // Much higher dry signal for vocoder output
 
         this.wetGain = ctx.createGain();
-        this.wetGain.gain.value = 0.9; // High wet for strong effect
+        this.wetGain.gain.value = 2.0; // Much higher wet signal for vocoder output
 
         // Create massive reverb (the "caves")
         this.reverb = ctx.createConvolver();
@@ -83,6 +83,11 @@ export class VocoderEngine extends AbstractSynthEngine {
 
         // Create vocoder bands
         this.createVocoderBands();
+
+        // Connect micGain (modulator input) to all modulator bands for envelope detection
+        this.modulatorBands.forEach(band => {
+            this.micGain!.connect(band);
+        });
 
         // Audio routing:
         // Internal Carrier -> Vocoder Carrier Bands -> Controlled by Mic Envelope -> Output
@@ -170,7 +175,7 @@ export class VocoderEngine extends AbstractSynthEngine {
 
         for (let i = 0; i < this.NUM_BANDS; i++) {
             const freq = minFreq * Math.pow(ratio, i);
-            const bandwidth = freq * 0.4; // 40% bandwidth
+            const bandwidth = freq * 0.8; // Much wider bandwidth (80%) to let more signal through
 
             // Modulator band (analyzes mic input) - separate path for envelope detection
             const modFilter = ctx.createBiquadFilter();
@@ -219,8 +224,10 @@ export class VocoderEngine extends AbstractSynthEngine {
         const ctx = this.getContext();
         if (!ctx) return;
 
+        let logCounter = 0;
         const update = () => {
             // Update gain for each band based on modulator amplitude
+            let totalRms = 0;
             this.envelopeFollowers.forEach(({ analyser, gain }, index) => {
                 if (!this.isPlayingBuffer) {
                     // When not playing buffer, silence the output
@@ -238,13 +245,22 @@ export class VocoderEngine extends AbstractSynthEngine {
                     sum += normalized * normalized;
                 }
                 const rms = Math.sqrt(sum / dataArray.length);
+                totalRms += rms;
 
-                // Apply to carrier band gain - adjusted for better response
-                // Use a more sensitive scaling for microphone input
-                const minGain = 0.01; // Lower floor to allow more subtle modulation
-                const modulatedGain = Math.max(minGain, rms * 50); // Increased multiplier for stronger effect
-                gain.gain.setTargetAtTime(modulatedGain, ctx!.currentTime, 0.01); // Use setTargetAtTime with small time constant to avoid clicks
+                // Apply to carrier band gain - adjusted for better voice intelligibility
+                // Use aggressive scaling to make modulation very audible
+                const minGain = 0.0; // Allow complete silence in gaps
+                const modulatedGain = Math.min(1.5, Math.max(minGain, rms * 80)); // Higher multiplier, capped
+                gain.gain.setTargetAtTime(modulatedGain, ctx!.currentTime, 0.008); // Faster response for voice transients
             });
+
+            // Log RMS every ~60 frames (approx 1 second)
+            if (this.isPlayingBuffer && logCounter++ % 60 === 0) {
+                const avgRms = totalRms / this.envelopeFollowers.length;
+                const avgGain = Math.min(1.5, avgRms * 80);
+                console.log('[Vocoder] Avg RMS:', avgRms.toFixed(4), 'Avg Gain:', avgGain.toFixed(2),
+                    'External carriers:', this.criosferaTap ? 'Criosfera' : '', this.gearheartTap ? 'Gearheart' : '');
+            }
 
             this.envelopeAnimationId = requestAnimationFrame(update);
         };
@@ -296,7 +312,7 @@ export class VocoderEngine extends AbstractSynthEngine {
             });
         }
 
-        // Update carrier balance
+        // Update carrier balance - if we have external carriers, silence internal
         this.updateCarrierBalance();
     }
 
@@ -306,19 +322,25 @@ export class VocoderEngine extends AbstractSynthEngine {
             return;
         }
 
-        // carrierBalance comes from viscosity parameter (0-1)
-        // 0 = internal only, 1 = external only
-        const externalWeight = this.carrierBalance;
-        const internalWeight = 1.0 - externalWeight;
-
-        // At 100% viscosity, internal should be completely silent
-        // Scale internal by 0.05 max, but at viscosity=1.0 it should be 0
-        const internalGain = internalWeight * 0.05;
-
         const ctx = this.getContext();
         if (!ctx) return;
 
-        this.internalCarrierGain.gain.setTargetAtTime(internalGain, ctx.currentTime, 0.1);
+        // Check if we have external carriers connected
+        const hasExternalCarrier = this.criosferaTap !== null || this.gearheartTap !== null;
+
+        if (hasExternalCarrier) {
+            // Silence internal carrier when external carriers are active
+            // Let Criosfera/Gearheart be the sound source
+            this.internalCarrierGain.gain.setTargetAtTime(0, ctx.currentTime, 0.1);
+            console.log('[Vocoder] Internal carrier silenced - using external carriers');
+        } else {
+            // No external carriers - use internal carrier with viscosity-controlled balance
+            // carrierBalance (from viscosity) controls how much internal carrier we use
+            const internalWeight = 1.0 - this.carrierBalance;
+            const internalGain = Math.max(0.3, internalWeight * 0.8);
+            this.internalCarrierGain.gain.setTargetAtTime(internalGain, ctx.currentTime, 0.1);
+            console.log('[Vocoder] Using internal carrier, gain:', internalGain);
+        }
     }
 
     /**
@@ -385,27 +407,46 @@ export class VocoderEngine extends AbstractSynthEngine {
 
 
     startPlaybackLoop() {
-        if (!this.recordedBuffer) return;
+        if (!this.recordedBuffer) {
+            console.error('[Vocoder] No recorded buffer available');
+            return;
+        }
         this.stopPlayback(); // Stop existing
 
         const ctx = this.getContext();
-        if (!ctx || !this.micGain) return;
+        if (!ctx || !this.micGain) {
+            console.error('[Vocoder] No context or micGain');
+            return;
+        }
 
-        // Re-create internal carrier
+        console.log('[Vocoder] Starting playback loop, buffer duration:', this.recordedBuffer.duration);
+
+        // Re-create internal carrier and reconnect to bands
         this.createInternalCarrier();
+
+        // Ensure carrier is connected to bands
+        if (this.internalCarrierGain) {
+            this.carrierBands.forEach(band => {
+                try {
+                    this.internalCarrierGain!.connect(band);
+                } catch (e) {
+                    // Already connected
+                }
+            });
+            console.log('[Vocoder] Carrier connected to', this.carrierBands.length, 'bands, gain:', this.internalCarrierGain.gain.value);
+        }
 
         this.bufferSource = ctx.createBufferSource();
         this.bufferSource.buffer = this.recordedBuffer;
         this.bufferSource.loop = true;
 
-        // Connect buffer to micGain which goes to modulator bands
+        // Connect buffer to micGain which goes to modulator bands for envelope detection
         this.bufferSource.connect(this.micGain);
-
-        // Ensure micGain is connected to bands (done in setup but just to be sure)
-        // this.modulatorBands.forEach(...) - assumig already connected from initialize
+        console.log('[Vocoder] Buffer connected to micGain for modulation');
 
         this.bufferSource.start(0);
         this.isPlayingBuffer = true;
+        console.log('[Vocoder] Playback started');
     }
 
     stopPlayback() {
