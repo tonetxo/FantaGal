@@ -16,7 +16,11 @@ export class VocoderEngine extends AbstractSynthEngine {
 
     // Audio nodes
     private micStream: MediaStream | null = null;
-    private micSource: MediaStreamAudioSourceNode | null = null;
+    private mediaRecorder: MediaRecorder | null = null;
+    private audioChunks: Blob[] = [];
+    private recordedBuffer: AudioBuffer | null = null;
+    private bufferSource: AudioBufferSourceNode | null = null;
+
     private micGain: GainNode | null = null;
     private carrierGain: GainNode | null = null;
     private dryGain: GainNode | null = null;
@@ -34,7 +38,8 @@ export class VocoderEngine extends AbstractSynthEngine {
     private gearheartTap: GainNode | null = null;
 
     // State
-    private isMicActive: boolean = false;
+    private isRecording: boolean = false;
+    private isPlayingBuffer: boolean = false;
     private carrierBalance: number = 0.5; // 0 = all Criosfera, 1 = all Gearheart
     private envelopeAnimationId: number | null = null; // For cancelling animation loop
 
@@ -217,8 +222,8 @@ export class VocoderEngine extends AbstractSynthEngine {
         const update = () => {
             // Update gain for each band based on modulator amplitude
             this.envelopeFollowers.forEach(({ analyser, gain }, index) => {
-                if (!this.isMicActive) {
-                    // When mic is off, silence the output
+                if (!this.isPlayingBuffer) {
+                    // When not playing buffer, silence the output
                     gain.gain.setTargetAtTime(0, ctx!.currentTime, 0.05);
                     return;
                 }
@@ -319,62 +324,135 @@ export class VocoderEngine extends AbstractSynthEngine {
     /**
      * Enable/disable microphone input
      */
-    public async setMicEnabled(enabled: boolean): Promise<void> {
+    async startRecording() {
+        if (this.isRecording) return;
+        const ctx = this.getContext();
+        if (!ctx) return;
+
+        // Stop any current playback
+        this.stopPlayback();
+        this.stopInternalCarrier();
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    echoCancellation: false,
+                    noiseSuppression: false,
+                    autoGainControl: false
+                }
+            });
+            this.micStream = stream;
+            this.audioChunks = [];
+
+            this.mediaRecorder = new MediaRecorder(stream);
+            this.mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) this.audioChunks.push(e.data);
+            };
+
+            this.mediaRecorder.onstop = async () => {
+                try {
+                    const blob = new Blob(this.audioChunks, { type: 'audio/webm' });
+                    const arrayBuffer = await blob.arrayBuffer();
+                    // Decode needs to happen on context
+                    this.recordedBuffer = await ctx.decodeAudioData(arrayBuffer);
+                    this.normalizeBuffer(this.recordedBuffer);
+
+                    // Stop stream tracks
+                    stream.getTracks().forEach(track => track.stop());
+                    this.micStream = null;
+
+                    // Start Playing loop immediately
+                    this.startPlaybackLoop();
+                } catch (e) {
+                    console.error("Error decoding audio", e);
+                }
+            };
+
+            this.mediaRecorder.start();
+            this.isRecording = true;
+
+        } catch (err) {
+            console.error("Mic access denied", err);
+        }
+    }
+
+    stopRecording() {
+        if (!this.isRecording || !this.mediaRecorder) return;
+        this.mediaRecorder.stop();
+        this.isRecording = false;
+    }
+
+    private normalizeBuffer(buffer: AudioBuffer) {
+        // Simple peak normalization for mono/stereo
+        for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
+            const data = buffer.getChannelData(channel);
+            let maxPeak = 0;
+            for (let i = 0; i < data.length; i++) {
+                if (Math.abs(data[i]) > maxPeak) maxPeak = Math.abs(data[i]);
+            }
+
+            if (maxPeak > 0) {
+                const gain = 0.95 / maxPeak;
+                for (let i = 0; i < data.length; i++) {
+                    data[i] *= gain;
+                }
+            }
+        }
+    }
+
+    startPlaybackLoop() {
+        if (!this.recordedBuffer) return;
+        this.stopPlayback(); // Stop existing
+
         const ctx = this.getContext();
         if (!ctx || !this.micGain) return;
 
-        if (enabled) {
-            // Request microphone access
-            if (!this.micStream) {
-                try {
-                    this.micStream = await navigator.mediaDevices.getUserMedia({
-                        audio: {
-                            echoCancellation: true,
-                            noiseSuppression: false,
-                            autoGainControl: false
-                        }
-                    });
-                } catch (err) {
-                    console.error('[Vocoder] Error accessing microphone:', err);
-                    return;
-                }
-            }
+        // Re-create internal carrier
+        this.createInternalCarrier();
 
-            // Connect microphone
-            if (!this.micSource) {
-                this.micSource = ctx.createMediaStreamSource(this.micStream);
-                this.micSource.connect(this.micGain);
+        this.bufferSource = ctx.createBufferSource();
+        this.bufferSource.buffer = this.recordedBuffer;
+        this.bufferSource.loop = true;
 
-                // Connect mic to all modulator bands
-                this.modulatorBands.forEach(band => {
-                    this.micGain!.connect(band);
-                });
-            }
+        // Connect buffer to micGain which goes to modulator bands
+        this.bufferSource.connect(this.micGain);
 
-            this.micStream.getAudioTracks().forEach(track => track.enabled = true);
+        // Ensure micGain is connected to bands (done in setup but just to be sure)
+        // this.modulatorBands.forEach(...) - assumig already connected from initialize
 
-            // Start carrier (recreate to ensure fresh sources)
-            this.stopInternalCarrier();
-            this.createInternalCarrier();
+        this.bufferSource.start(0);
+        this.isPlayingBuffer = true;
+    }
 
-            this.isMicActive = true;
-        } else {
-            // Stop carrier
-            this.stopInternalCarrier();
-
-            // Stop and disconnect microphone
-            if (this.micStream) {
-                this.micStream.getAudioTracks().forEach(track => {
-                    track.stop();
-                });
-            }
-            if (this.micSource) {
-                this.micSource.disconnect();
-                this.micSource = null;
-            }
-            this.micStream = null;
-            this.isMicActive = false;
+    stopPlayback() {
+        if (this.bufferSource) {
+            try {
+                this.bufferSource.stop();
+                this.bufferSource.disconnect();
+            } catch (e) { /* ignore */ }
+            this.bufferSource = null;
         }
+        this.stopInternalCarrier();
+        this.isPlayingBuffer = false;
+    }
+
+    // Facade methods for UI
+    getIsRecording() { return this.isRecording; }
+    getIsPlayingBuffer() { return this.isPlayingBuffer; }
+
+    // Deprecated but kept for compatibility logic (will be replaced in logic)
+    async setMicEnabled(enabled: boolean) {
+        if (enabled) {
+            // Do nothing, UI calls startRecording now
+        } else {
+            this.stopRecording();
+            this.stopPlayback();
+        }
+    }
+
+    // Getters for previous UI props
+    getIsMicActive() {
+        return this.isRecording || this.isPlayingBuffer;
     }
 
     updateParameters(state: SynthState): void {
@@ -430,11 +508,6 @@ export class VocoderEngine extends AbstractSynthEngine {
         // Not used for vocoder
     }
 
-    // Accessors for UI
-    public getIsMicActive(): boolean {
-        return this.isMicActive;
-    }
-
     public getOutputAnalyser(): AnalyserNode | null {
         return this.outputAnalyser;
     }
@@ -447,10 +520,8 @@ export class VocoderEngine extends AbstractSynthEngine {
      * Reset the engine to its default state when deactivated
      */
     public reset(): void {
-        // Stop and disconnect mic if active
-        if (this.isMicActive) {
-            this.setMicEnabled(false);
-        }
+        this.stopRecording();
+        this.stopPlayback();
 
         // Cancel envelope following animation loop
         if (this.envelopeAnimationId !== null) {

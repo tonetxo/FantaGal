@@ -12,7 +12,11 @@ type VialType = 'mercury' | 'amber' | 'neutral';
 export class EchoVesselEngine extends AbstractSynthEngine {
     // Input & Routing
     private micStream: MediaStream | null = null;
-    private micSource: MediaStreamAudioSourceNode | null = null;
+    private mediaRecorder: MediaRecorder | null = null;
+    private audioChunks: Blob[] = [];
+    private recordedBuffer: AudioBuffer | null = null;
+    private bufferSource: AudioBufferSourceNode | null = null;
+
     private inputGain: GainNode | null = null;
     private dryGain: GainNode | null = null;
     private wetGain: GainNode | null = null;
@@ -33,7 +37,8 @@ export class EchoVesselEngine extends AbstractSynthEngine {
 
     // State
     private currentVial: VialType = 'neutral';
-    private isMicActive: boolean = false;
+    private isRecording: boolean = false;
+    private isPlayingBuffer: boolean = false;
 
     // AI Speech Generator
     private speechActive: boolean = false;
@@ -138,58 +143,138 @@ export class EchoVesselEngine extends AbstractSynthEngine {
         return this.micPreparationPromise;
     }
 
-    async setMicEnabled(enabled: boolean) {
+    async startRecording() {
+        if (this.isRecording) return;
         const ctx = this.getContext();
-        if (enabled) {
-            if (!this.micStream) {
-                await this.prepareMic();
-            }
+        if (!ctx) return;
 
-            if (!this.micStream || !ctx || !this.inputGain) return;
+        // Stop any current playback
+        this.stopPlayback();
 
-            const t = ctx.currentTime;
-            this.inputGain.gain.setValueAtTime(0, t);
-
-            if (!this.micSource) {
-                this.micSource = ctx.createMediaStreamSource(this.micStream);
-                this.micSource.connect(this.antiCouplingFilter!);
-                this.antiCouplingFilter!.connect(this.inputGain);
-            }
-
-            this.micStream.getAudioTracks().forEach(track => track.enabled = true);
-            this.inputGain.gain.linearRampToValueAtTime(0.85, t + 0.05);
-            this.isMicActive = true;
-        } else {
-            if (!ctx || !this.inputGain) {
-                this.isMicActive = false;
-                return;
-            }
-
-            const t = ctx.currentTime;
-            this.inputGain.gain.setValueAtTime(this.inputGain.gain.value, t);
-            this.inputGain.gain.linearRampToValueAtTime(0, t + 0.05);
-
-            setTimeout(() => {
-                if (this.micStream) {
-                    this.micStream.getAudioTracks().forEach(track => track.stop());
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    echoCancellation: false,
+                    noiseSuppression: false,
+                    autoGainControl: false
                 }
-                if (this.micSource) {
-                    this.micSource.disconnect();
-                    this.micSource = null;
-                }
-                this.micStream = null;
-            }, 60);
+            });
+            this.micStream = stream;
+            this.audioChunks = [];
 
-            this.isMicActive = false;
+            this.mediaRecorder = new MediaRecorder(stream);
+            this.mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) this.audioChunks.push(e.data);
+            };
+
+            this.mediaRecorder.onstop = async () => {
+                try {
+                    const blob = new Blob(this.audioChunks, { type: 'audio/webm' });
+                    const arrayBuffer = await blob.arrayBuffer();
+                    // Decode needs to happen on context
+                    this.recordedBuffer = await ctx.decodeAudioData(arrayBuffer);
+                    this.normalizeBuffer(this.recordedBuffer);
+
+                    // Stop stream tracks
+                    stream.getTracks().forEach(track => track.stop());
+                    this.micStream = null;
+
+                    // Start Playing loop immediately
+                    this.startPlaybackLoop();
+                } catch (e) {
+                    console.error("Error decoding audio", e);
+                }
+            };
+
+            this.mediaRecorder.start();
+            this.isRecording = true;
+
+        } catch (err) {
+            console.error("Mic access denied", err);
         }
     }
 
-    async startMic() {
-        await this.setMicEnabled(true);
+    stopRecording() {
+        if (!this.isRecording || !this.mediaRecorder) return;
+        this.mediaRecorder.stop();
+        this.isRecording = false;
     }
 
-    stopMic() {
-        this.setMicEnabled(false);
+    private normalizeBuffer(buffer: AudioBuffer) {
+        // Simple peak normalization for mono/stereo
+        for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
+            const data = buffer.getChannelData(channel);
+            let maxPeak = 0;
+            for (let i = 0; i < data.length; i++) {
+                if (Math.abs(data[i]) > maxPeak) maxPeak = Math.abs(data[i]);
+            }
+
+            if (maxPeak > 0) {
+                // Normalize to 0.95 (-0.5dB)
+                const gain = 0.95 / maxPeak;
+                for (let i = 0; i < data.length; i++) {
+                    data[i] *= gain;
+                }
+            }
+        }
+    }
+
+    startPlaybackLoop() {
+        if (!this.recordedBuffer) return;
+        this.stopPlayback(); // Stop existing
+
+        const ctx = this.getContext();
+        if (!ctx || !this.inputGain) return;
+
+        this.bufferSource = ctx.createBufferSource();
+        this.bufferSource.buffer = this.recordedBuffer;
+        this.bufferSource.loop = true;
+
+        // Connect through the existing chain
+        this.bufferSource.connect(this.antiCouplingFilter!);
+        if (this.antiCouplingFilter) { // Re-verify just in case
+            this.antiCouplingFilter.connect(this.inputGain);
+        } else {
+            this.bufferSource.connect(this.inputGain);
+        }
+
+        // Fade in
+        const t = ctx.currentTime;
+        this.inputGain.gain.setValueAtTime(0, t);
+        this.inputGain.gain.linearRampToValueAtTime(0.85, t + 0.1);
+
+        this.bufferSource.start(0);
+        this.isPlayingBuffer = true;
+    }
+
+    stopPlayback() {
+        if (this.bufferSource) {
+            try {
+                this.bufferSource.stop();
+                this.bufferSource.disconnect();
+            } catch (e) { /* ignore */ }
+            this.bufferSource = null;
+        }
+        this.isPlayingBuffer = false;
+    }
+
+    // Facade methods for UI
+    getIsRecording() { return this.isRecording; }
+    getIsPlayingBuffer() { return this.isPlayingBuffer; }
+
+    // Deprecated but kept for compatibility logic (will be replaced in logic)
+    async setMicEnabled(enabled: boolean) {
+        if (enabled) {
+            // Do nothing, UI calls startRecording now
+        } else {
+            this.stopRecording();
+            this.stopPlayback();
+        }
+    }
+
+    // Getters for previous UI props
+    getIsMicActive() {
+        return this.isRecording || this.isPlayingBuffer;
     }
 
     // --- Effects Logic ---
@@ -409,15 +494,14 @@ export class EchoVesselEngine extends AbstractSynthEngine {
     // --- Reset method for cleanup ---
 
     reset(): void {
-        if (this.isMicActive) {
-            this.setMicEnabled(false);
-        }
+        this.stopRecording();
+        this.stopPlayback();
         this.stopSpeech();
     }
 
     // --- Accessors for UI ---
 
-    getIsMicActive() { return this.isMicActive; }
+    // getIsMicActive is defined above
     getIsSpeechActive() { return this.speechActive; }
     public getAnalyser(): AnalyserNode | null { return this.analyser; }
 }

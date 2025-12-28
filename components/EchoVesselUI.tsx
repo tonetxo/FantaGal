@@ -16,7 +16,7 @@ interface EchoVesselUIProps {
 
 const EchoVesselUI: React.FC<EchoVesselUIProps> = ({ isActive, engine, aiPrompt, onGenerate, hasApiKey, report, isAiLoading, onVialChange }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const [micActive, setMicActive] = useState(false);
+    const [status, setStatus] = useState<'idle' | 'recording' | 'playing'>('idle');
     const [selectedVial, setSelectedVial] = useState<'neutral' | 'mercury' | 'amber'>('neutral');
 
     // Canvas dimensions with resize handling (using shared hook)
@@ -25,21 +25,27 @@ const EchoVesselUI: React.FC<EchoVesselUIProps> = ({ isActive, engine, aiPrompt,
     // Sync state from engine prop
     useEffect(() => {
         if (engine && isActive) {
-            setMicActive(engine.getIsMicActive());
+            if (engine.getIsRecording()) setStatus('recording');
+            else if (engine.getIsPlayingBuffer()) setStatus('playing');
+            else setStatus('idle');
         }
     }, [engine, isActive]);
 
-    // Handle Mic Toggle
+    // Handle Mic/Record Toggle
     const toggleMic = async () => {
         if (!engine || !isActive) return;
 
-        if (micActive) {
-            engine.setMicEnabled(false);
-            setMicActive(false);
-        } else {
-            await synthManager.resume(); // Ensure AudioContext is running
-            await engine.setMicEnabled(true);
-            setMicActive(true);
+        if (status === 'idle') {
+            await synthManager.resume();
+            await engine.startRecording();
+            setStatus('recording');
+        } else if (status === 'recording') {
+            engine.stopRecording();
+            // Engine logic auto-starts playback after recording
+            setStatus('playing');
+        } else { // Playing
+            engine.stopPlayback();
+            setStatus('idle');
         }
     };
 
@@ -232,12 +238,16 @@ const EchoVesselUI: React.FC<EchoVesselUIProps> = ({ isActive, engine, aiPrompt,
                 <div className="flex justify-between w-full">
                     <button
                         onClick={toggleMic}
-                        className={`w-16 h-16 rounded-full border-2 flex items-center justify-center transition-all ${micActive
-                            ? 'border-red-500 bg-red-900/30 text-red-500 shadow-[0_0_20px_rgba(239,68,68,0.4)]'
-                            : 'border-slate-700 text-slate-700 bg-black/40 backdrop-blur-sm'
+                        className={`w-16 h-16 rounded-full border-2 flex items-center justify-center transition-all ${status === 'recording'
+                                ? 'border-red-500 bg-red-900/30 text-red-500 shadow-[0_0_20px_rgba(239,68,68,0.4)] animate-pulse'
+                                : status === 'playing'
+                                    ? 'border-emerald-500 bg-emerald-900/30 text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.4)]'
+                                    : 'border-slate-700 text-slate-700 bg-black/40 backdrop-blur-sm'
                             }`}
                     >
-                        <span className="material-icons text-2xl">🎤</span>
+                        <span className="text-2xl">
+                            {status === 'recording' ? '⏹️' : status === 'playing' ? '🔄' : '🎤'}
+                        </span>
                     </button>
 
                     <button

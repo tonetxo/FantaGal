@@ -25,36 +25,41 @@ interface VocoderUIProps {
 const VocoderUI: React.FC<VocoderUIProps> = ({ isActive, engine }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const particlesRef = useRef<Particle[]>([]);
-    const [micActive, setMicActive] = useState(false);
+    const [status, setStatus] = useState<'idle' | 'recording' | 'playing'>('idle');
 
     // Audio analysis state
     const audioDataRef = useRef<number[]>(Array(12).fill(0)); // 12 bands
     const lastUpdateRef = useRef<number>(0);
-    const concentricWavesRef = useRef<Array<{radius: number, intensity: number, frequency: number}>>([]);
+    const concentricWavesRef = useRef<Array<{ radius: number, intensity: number, frequency: number }>>([]);
 
     // Canvas dimensions with resize handling
     const dimensions = useCanvasDimensions(0.6);
 
-    // Reset mic state when engine is deactivated
+    // Sync state from engine prop
     useEffect(() => {
-        if (!isActive || !engine) {
-            setMicActive(false);
+        if (engine && isActive) {
+            if (engine.getIsRecording()) setStatus('recording');
+            else if (engine.getIsPlayingBuffer()) setStatus('playing');
+            else setStatus('idle');
+        } else {
+            setStatus('idle');
         }
-    }, [isActive, engine]);
+    }, [engine, isActive]);
 
-    // Handle Mic Toggle
+    // Handle Mic/Record Toggle
     const toggleMic = async () => {
         if (!engine || !isActive) return;
 
-        console.log(`[VocoderUI] toggleMic called, current micActive: ${micActive}`);
-
-        if (micActive) {
-            await engine.setMicEnabled(false);
-            setMicActive(false);
-        } else {
+        if (status === 'idle') {
             await synthManager.resume();
-            await engine.setMicEnabled(true);
-            setMicActive(true);
+            await engine.startRecording();
+            setStatus('recording');
+        } else if (status === 'recording') {
+            engine.stopRecording();
+            setStatus('playing');
+        } else { // Playing
+            engine.stopPlayback();
+            setStatus('idle');
         }
     };
 
@@ -80,7 +85,7 @@ const VocoderUI: React.FC<VocoderUIProps> = ({ isActive, engine }) => {
             const time = Date.now() * 0.001;
 
             // Get audio data from engine
-            if (engine && micActive) {
+            if (engine && status === 'playing') {
                 const analysers = engine.getBandAnalysers();
                 const newAudioData: number[] = [];
 
@@ -117,7 +122,7 @@ const VocoderUI: React.FC<VocoderUIProps> = ({ isActive, engine }) => {
             const totalAmplitude = audioDataRef.current.reduce((sum, val) => sum + val, 0) / audioDataRef.current.length;
             if (totalAmplitude > 0.1 && Math.random() < totalAmplitude * 5) {
                 const avgFreq = audioDataRef.current.reduce((sum, val, idx) => sum + val * idx, 0) /
-                               Math.max(0.001, audioDataRef.current.reduce((sum, val) => sum + val, 0));
+                    Math.max(0.001, audioDataRef.current.reduce((sum, val) => sum + val, 0));
 
                 concentricWavesRef.current.push({
                     radius: 50,
@@ -277,7 +282,7 @@ const VocoderUI: React.FC<VocoderUIProps> = ({ isActive, engine }) => {
             }
 
             // Spawn new particles based on audio activity
-            if (micActive) {
+            if (status === 'playing') {
                 const avgAmplitude = audioDataRef.current.reduce((sum, val) => sum + val, 0) / audioDataRef.current.length;
                 if (avgAmplitude > 0.05 && Math.random() < avgAmplitude * 10) {
                     // Create particles that respond to the average audio amplitude
@@ -310,7 +315,7 @@ const VocoderUI: React.FC<VocoderUIProps> = ({ isActive, engine }) => {
         render();
 
         return () => cancelAnimationFrame(animationId);
-    }, [isActive, engine, micActive]);
+    }, [isActive, engine, status]);
 
     return (
         <div className="w-full h-full flex flex-col items-center justify-center bg-[#0d1117] overflow-hidden relative">
@@ -335,18 +340,24 @@ const VocoderUI: React.FC<VocoderUIProps> = ({ isActive, engine }) => {
                 <div className="flex justify-center">
                     <button
                         onClick={toggleMic}
-                        className={`w-20 h-20 rounded-full border-2 flex items-center justify-center transition-all ${micActive
-                            ? 'border-emerald-500 bg-emerald-900/30 text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.4)]'
-                            : 'border-emerald-800 text-emerald-700 bg-black/40 backdrop-blur-sm'
+                        className={`w-20 h-20 rounded-full border-2 flex items-center justify-center transition-all ${status === 'recording'
+                                ? 'border-red-500 bg-red-900/30 text-red-500 shadow-[0_0_20px_rgba(239,68,68,0.4)] animate-pulse'
+                                : status === 'playing'
+                                    ? 'border-emerald-500 bg-emerald-900/30 text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.4)]'
+                                    : 'border-emerald-800 text-emerald-700 bg-black/40 backdrop-blur-sm'
                             }`}
                     >
-                        <span className="text-3xl">🎤</span>
+                        <span className="text-3xl">
+                            {status === 'recording' ? '⏹️' : status === 'playing' ? '🔄' : '🎤'}
+                        </span>
                     </button>
                 </div>
 
                 {/* Info Text */}
                 <div className="text-center text-emerald-500/60 text-xs font-mono uppercase tracking-widest">
-                    {micActive ? 'Modulando as Covas...' : 'Activa o Micrófono'}
+                    {status === 'recording' ? 'Gravando Audio...' :
+                        status === 'playing' ? 'Modulando as Covas...' :
+                            'Gravar Micrófono'}
                 </div>
             </div>
         </div>
