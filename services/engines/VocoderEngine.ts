@@ -101,7 +101,7 @@ export class VocoderEngine extends AbstractSynthEngine {
         this.wetGain.connect(this.reverb);
         this.reverb.connect(masterGain);
 
-        // Connect dry path
+        // Connect dry path (direct mic signal)
         this.dryGain.connect(masterGain);
 
         // Connect master to analyser and then to masterBus (no internal compressor)
@@ -188,11 +188,11 @@ export class VocoderEngine extends AbstractSynthEngine {
             modFilter.Q.value = freq / bandwidth;
             this.modulatorBands.push(modFilter);
 
-            // Envelope follower (extracts amplitude from modulator) - separate analyser
-            const analyser = ctx.createAnalyser();
-            analyser.fftSize = 256;
-            analyser.smoothingTimeConstant = 0.85; // Slightly less smooth for better voice tracking
-            modFilter.connect(analyser);
+            // Modulator band (analyzes mic input)
+            const modAnalyser = ctx.createAnalyser();
+            modAnalyser.fftSize = 256;
+            modAnalyser.smoothingTimeConstant = 0.95; // More smoothing for cleaner envelope
+            modFilter.connect(modAnalyser);
 
             // Carrier band (filters carrier signal)
             const carrierFilter = ctx.createBiquadFilter();
@@ -201,16 +201,21 @@ export class VocoderEngine extends AbstractSynthEngine {
             carrierFilter.Q.value = freq / bandwidth;
             this.carrierBands.push(carrierFilter);
 
-            // Gain controlled by envelope - start with 0 gain when no modulation
-            const bandGain = ctx.createGain();
-            bandGain.gain.value = 0.01; // Small initial gain to prevent complete silence
-            carrierFilter.connect(bandGain);
+            // Create a gain node controlled by the modulator envelope
+            const carrierGain = ctx.createGain();
+            carrierGain.gain.value = 0.01; // Start with low gain
+            carrierFilter.connect(carrierGain);
 
             // Output to wet/dry
-            bandGain.connect(this.wetGain!);
-            bandGain.connect(this.dryGain!);
+            carrierGain.connect(this.wetGain!);
+            carrierGain.connect(this.dryGain!);
 
-            this.envelopeFollowers.push({ analyser, gain: bandGain });
+            this.envelopeFollowers.push({
+                analyser: modAnalyser,
+                gain: carrierGain,
+                baseGain: 0.01,
+                maxGain: 5.0
+            });
         }
 
         // Connect internal carrier to all carrier bands
@@ -232,17 +237,17 @@ export class VocoderEngine extends AbstractSynthEngine {
         const update = () => {
             // Update gain for each band based on modulator amplitude
             let totalRms = 0;
-            this.envelopeFollowers.forEach(({ analyser, gain }, index) => {
+            this.envelopeFollowers.forEach(({ analyser, gain, baseGain, maxGain }, index) => {
                 if (!this.isPlayingBuffer) {
                     // When not playing buffer, silence the output
-                    gain.gain.setTargetAtTime(0.01, ctx!.currentTime, 0.05); // Keep minimal gain to prevent clicks
+                    gain.gain.setTargetAtTime(baseGain!, ctx.currentTime, 0.05); // Keep minimal gain to prevent clicks
                     return;
                 }
 
                 const dataArray = new Uint8Array(analyser.frequencyBinCount);
                 analyser.getByteTimeDomainData(dataArray);
 
-                // Calculate RMS amplitude
+                // Calculate RMS amplitude (this is the envelope)
                 let sum = 0;
                 for (let i = 0; i < dataArray.length; i++) {
                     const normalized = (dataArray[i] - 128) / 128;
@@ -253,17 +258,18 @@ export class VocoderEngine extends AbstractSynthEngine {
 
                 // Apply to carrier band gain - adjusted for better voice intelligibility
                 // Use more sensitive scaling to make modulation more audible
-                const minGain = 0.01; // Small minimum to prevent complete silence
+                const minGain = baseGain || 0.01; // Small minimum to prevent complete silence
 
                 // Noise gate to prevent background hiss from opening bands
                 let effectiveRms = rms;
                 if (effectiveRms < 0.02) effectiveRms = 0.01; // Lower gate threshold for more sensitivity
 
-                // Multiplier adjusted for better voice modulation - was 150, now more sensitive
-                const modulatedGain = Math.min(5.0, Math.max(minGain, effectiveRms * 300));
+                // Multiplier adjusted for better voice modulation
+                const sensitivity = 250; // Increased sensitivity
+                const modulatedGain = Math.min(maxGain || 3.0, Math.max(minGain, effectiveRms * sensitivity));
 
                 // Use setTargetAtTime for smoother transitions and less artifacts
-                gain.gain.setTargetAtTime(modulatedGain, ctx!.currentTime, 0.02); // Faster response for voice
+                gain.gain.setTargetAtTime(modulatedGain, ctx.currentTime, 0.015); // Faster response for voice
             });
 
             // Log RMS every ~60 frames (approx 1 second)
@@ -313,13 +319,21 @@ export class VocoderEngine extends AbstractSynthEngine {
         // This is critical - each band must receive the carrier signal
         if (criosferaTap) {
             this.carrierBands.forEach(band => {
-                criosferaTap.connect(band);
+                try {
+                    criosferaTap.connect(band);
+                } catch (e) {
+                    // Already connected
+                }
             });
         }
 
         if (gearheartTap) {
             this.carrierBands.forEach(band => {
-                gearheartTap.connect(band);
+                try {
+                    gearheartTap.connect(band);
+                } catch (e) {
+                    // Already connected
+                }
             });
         }
 
@@ -348,7 +362,7 @@ export class VocoderEngine extends AbstractSynthEngine {
             // No external carriers - use internal carrier with viscosity-controlled balance
             // carrierBalance (from viscosity) controls how much internal carrier we use
             const internalWeight = 1.0 - this.carrierBalance;
-            const internalGain = Math.max(0.1, internalWeight * 0.4); // Reduced to prevent overpowering
+            const internalGain = Math.max(0.05, internalWeight * 0.3); // Reduced to prevent overpowering
             this.internalCarrierGain.gain.setTargetAtTime(internalGain, ctx.currentTime, 0.1);
             console.log('[Vocoder] Using internal carrier, gain:', internalGain);
         }
