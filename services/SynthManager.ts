@@ -64,11 +64,11 @@ class SynthManager {
     this.masterGain.gain.value = 0.8; // Safe default headroom
 
     this.masterLimiter = this.ctx.createDynamicsCompressor();
-    this.masterLimiter.threshold.value = -1.0; // Prevent clipping
-    this.masterLimiter.knee.value = 10;
-    this.masterLimiter.ratio.value = 20;
-    this.masterLimiter.attack.value = 0.002;
-    this.masterLimiter.release.value = 0.1;
+    this.masterLimiter.threshold.value = -3.0; // Was -1.0, more headroom to avoid clicks
+    this.masterLimiter.knee.value = 15; // Was 10, softer knee
+    this.masterLimiter.ratio.value = 12; // Was 20, gentler compression
+    this.masterLimiter.attack.value = 0.005; // Was 0.002, slower attack to avoid clicks
+    this.masterLimiter.release.value = 0.2; // Was 0.1, smoother release
 
     this.masterGain.connect(this.masterLimiter);
     this.masterLimiter.connect(this.ctx.destination);
@@ -113,8 +113,8 @@ class SynthManager {
     // The principle is that all engines keep sounding unless stopped explicitly.
     this.activeEngineName = engineName;
 
-    // Ensure the engine is created and initialized
-    this.getOrCreateEngine(engineName);
+    // NOTE: Engine creation is now lazy - it happens when UI requests the engine
+    // This avoids lag during switch navigation
   }
 
   /**

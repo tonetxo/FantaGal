@@ -30,8 +30,17 @@ const BreitemaUI: React.FC<BreitemaUIProps> = ({ isActive, theme }) => {
     const [lastTriggerStep, setLastTriggerStep] = useState(-1);
     const [interactFlash, setInteractFlash] = useState(0);
     const animationRef = useRef<number | null>(null);
+    const engineRef = useRef<BreitemaEngine | null>(null);
 
+    // Get fresh engine reference on each render (for click handlers etc)
     const engine = synthManager.getEngine('breitema') as BreitemaEngine | undefined;
+
+    // Keep ref updated for cleanup purposes
+    if (engine) {
+        engineRef.current = engine;
+    }
+
+
 
     // Update UI from engine state
     useEffect(() => {
@@ -64,20 +73,20 @@ const BreitemaUI: React.FC<BreitemaUIProps> = ({ isActive, theme }) => {
     }, [isActive, engine]);
 
     const toggleStep = (index: number) => {
-        if (!engine) return;
+        if (!engine || !isActive) return;
         engine.toggleStep(index);
         // Trigger a visual interaction flash
         setInteractFlash(v => v + 1);
     };
 
     const handleRhythmModeChange = (mode: 'libre' | 'muineira' | 'ribeirada') => {
-        if (!engine) return;
+        if (!engine || !isActive) return;
         engine.setRhythmMode(mode);
         setRhythmMode(mode);
     };
 
     const togglePlayback = () => {
-        if (!engine) return;
+        if (!engine || !isActive) return;
         if (isPlaying) {
             engine.stopSequencer();
         } else {
@@ -87,12 +96,12 @@ const BreitemaUI: React.FC<BreitemaUIProps> = ({ isActive, theme }) => {
     };
 
     const regeneratePattern = () => {
-        if (!engine) return;
+        if (!engine || !isActive) return;
         engine.generateRandomPattern();
     };
 
     return (
-        <div className="flex flex-col items-center justify-between h-full w-full p-4 pt-24">
+        <div className={`flex flex-col items-center justify-between h-full w-full p-4 pt-24 ${!isActive ? 'opacity-50 pointer-events-none' : ''}`}>
             {/* Rhythm Mode Selector - Top */}
             <div className="flex gap-2">
                 {RHYTHM_MODES.map(mode => (

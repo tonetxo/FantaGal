@@ -103,9 +103,10 @@ export const useSynth = (initialEngine: 'criosfera' | 'gearheart' | 'echo-vessel
                     await vocoderEngine.setMicEnabled(false);
                 }
             } else if (currentEngine === 'breitema') {
-                const breitemaEngine = synthManager.getEngine('breitema');
-                if (breitemaEngine?.reset) {
-                    breitemaEngine.reset();
+                const breitemaEngine = synthManager.getEngine('breitema') as any;
+                if (breitemaEngine) {
+                    breitemaEngine.stopSequencer?.();
+                    breitemaEngine.reset?.();
                 }
             }
 
@@ -126,7 +127,7 @@ export const useSynth = (initialEngine: 'criosfera' | 'gearheart' | 'echo-vessel
         }
     };
 
-    const switchEngine = (engine: 'criosfera' | 'gearheart' | 'echo-vessel' | 'vocoder') => {
+    const switchEngine = (engine: 'criosfera' | 'gearheart' | 'echo-vessel' | 'vocoder' | 'breitema') => {
         setCurrentEngine(engine);
         synthManager.switchEngine(engine);
     };

@@ -148,6 +148,11 @@ export class BreitemaEngine extends AbstractSynthEngine {
         this.currentStep = 0;
         this.nextStepTime = ctx.currentTime;
 
+        // Restore volume
+        if (this.masterGain) {
+            this.masterGain.gain.setValueAtTime(0.5, ctx.currentTime);
+        }
+
         this.scheduler();
     }
 
@@ -159,6 +164,12 @@ export class BreitemaEngine extends AbstractSynthEngine {
         if (this.schedulerTimerId) {
             clearTimeout(this.schedulerTimerId);
             this.schedulerTimerId = null;
+        }
+
+        // HARD STOP: Cut volume to zero immediately
+        if (this.masterGain && this.ctx) {
+            this.masterGain.gain.cancelScheduledValues(this.ctx.currentTime);
+            this.masterGain.gain.setValueAtTime(0, this.ctx.currentTime);
         }
     }
 
@@ -174,7 +185,9 @@ export class BreitemaEngine extends AbstractSynthEngine {
             this.advanceStep();
         }
 
-        this.schedulerTimerId = window.setTimeout(() => this.scheduler(), this.LOOK_AHEAD_MS);
+        if (this.isPlaying) {
+            this.schedulerTimerId = window.setTimeout(() => this.scheduler(), this.LOOK_AHEAD_MS);
+        }
     }
 
     /**

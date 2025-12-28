@@ -88,8 +88,8 @@ export class GearheartEngine extends AbstractSynthEngine {
     const masterGain = this.getMasterGain();
     if (!ctx || !masterGain) return;
 
-    // Set custom master gain - MUCH HIGHER for Gearheart
-    masterGain.gain.value = 4.0; // Was 2.0, before that 1.0
+    // Set custom master gain - balanced for mix
+    masterGain.gain.value = 2.0; // Was 4.0, reduced to avoid limiter pumping
 
     // NOTE: No internal compressor - we use the global masterLimiter only
 
@@ -115,10 +115,8 @@ export class GearheartEngine extends AbstractSynthEngine {
 
     // Connect directly to masterBus
     if (this.masterBus) {
-      console.log('[Gearheart] Connected to masterBus');
       this.percussionFilter.connect(this.masterBus);
     } else {
-      console.warn('[Gearheart] masterBus is NULL - connecting to destination');
       this.percussionFilter.connect(ctx.destination);
     }
 
@@ -469,7 +467,7 @@ export class GearheartEngine extends AbstractSynthEngine {
     const env = this.ctx.createGain();
     // Start from 0 and ramp up to avoid click
     env.gain.setValueAtTime(0, now);
-    env.gain.linearRampToValueAtTime(2.0 * volume, now + 0.003); // Was 0.3
+    env.gain.linearRampToValueAtTime(1.0 * volume, now + 0.003); // Was 2.0, reduced
     env.gain.exponentialRampToValueAtTime(0.001, now + duration);
 
     noise.connect(filter);
@@ -498,7 +496,7 @@ export class GearheartEngine extends AbstractSynthEngine {
 
     const noiseEnv = this.ctx.createGain();
     noiseEnv.gain.setValueAtTime(0, now);
-    noiseEnv.gain.linearRampToValueAtTime(0.4 * volume, now + 0.02); // Was 0.04
+    noiseEnv.gain.linearRampToValueAtTime(0.2 * volume, now + 0.02); // Was 0.4, reduced
     noiseEnv.gain.exponentialRampToValueAtTime(0.001, now + duration);
 
     // Body component (tonal part of the snare) - Shortened to a snap
@@ -509,7 +507,7 @@ export class GearheartEngine extends AbstractSynthEngine {
 
     const bodyEnv = this.ctx.createGain();
     bodyEnv.gain.setValueAtTime(0, now);
-    bodyEnv.gain.linearRampToValueAtTime(0.3 * volume, now + 0.003); // Was 0.03
+    bodyEnv.gain.linearRampToValueAtTime(0.15 * volume, now + 0.003); // Was 0.3, reduced
     bodyEnv.gain.exponentialRampToValueAtTime(0.001, now + 0.05); // Shortened duration to 0.05s
 
     // High pass filter to ensure no unwanted low frequency remains
@@ -585,16 +583,16 @@ export class GearheartEngine extends AbstractSynthEngine {
     clickOsc.frequency.setValueAtTime(150, now);
     clickOsc.frequency.exponentialRampToValueAtTime(40, now + 0.03);
 
-    // Sub envelope - MAXIMUM volume for powerful kick
+    // Sub envelope - balanced volume for clean mix
     const subEnv = this.ctx.createGain();
     subEnv.gain.setValueAtTime(0, now);
-    subEnv.gain.linearRampToValueAtTime(8.0, now + 0.003); // Was 5.0
+    subEnv.gain.linearRampToValueAtTime(4.0, now + 0.003); // Was 8.0, reduced
     subEnv.gain.exponentialRampToValueAtTime(0.001, now + decay);
 
-    // Click envelope - MAXIMUM volume
+    // Click envelope - balanced volume
     const clickEnv = this.ctx.createGain();
     clickEnv.gain.setValueAtTime(0, now);
-    clickEnv.gain.linearRampToValueAtTime(5.0, now + 0.002); // Was 3.0
+    clickEnv.gain.linearRampToValueAtTime(2.5, now + 0.002); // Was 5.0, reduced
     clickEnv.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
 
     // Connect through masterGain (original routing)
