@@ -104,9 +104,8 @@ export const useSynth = (initialEngine: 'criosfera' | 'gearheart' | 'echo-vessel
                 }
             } else if (currentEngine === 'breitema') {
                 const breitemaEngine = synthManager.getEngine('breitema') as any;
-                if (breitemaEngine) {
-                    breitemaEngine.stopSequencer?.();
-                    breitemaEngine.reset?.();
+                if (breitemaEngine?.reset) {
+                    breitemaEngine.reset();
                 }
             }
 
