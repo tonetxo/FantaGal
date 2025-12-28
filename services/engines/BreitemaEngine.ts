@@ -70,7 +70,7 @@ export class BreitemaEngine extends AbstractSynthEngine {
         const masterGain = this.getMasterGain();
         if (!ctx || !masterGain) return;
 
-        masterGain.gain.value = 0.8; // Boosted from 0.6
+        masterGain.gain.value = 1.0; // Reduced from 1.5/0.8 logic to prevent distortion
 
         // Filter
         this.filter = ctx.createBiquadFilter();
@@ -148,9 +148,9 @@ export class BreitemaEngine extends AbstractSynthEngine {
         this.currentStep = 0;
         this.nextStepTime = ctx.currentTime;
 
-        // Restore volume
+        // Restore volume - Reduced to prevent distortion
         if (this.masterGain) {
-            this.masterGain.gain.setValueAtTime(0.5, ctx.currentTime);
+            this.masterGain.gain.setValueAtTime(1.0, ctx.currentTime); // Was 1.5
         }
 
         this.scheduler();
@@ -251,9 +251,9 @@ export class BreitemaEngine extends AbstractSynthEngine {
         // Envelope
         const duration = 60 / this.tempo / 2; // Half step duration
         noteGain.gain.setValueAtTime(0, time);
-        // Smoother attack ramp (5ms) to kill clicks
-        noteGain.gain.linearRampToValueAtTime(0.4, time + 0.005);
-        noteGain.gain.exponentialRampToValueAtTime(0.01, time + duration);
+        // Smoother attack ramp (8ms) to kill clicks
+        noteGain.gain.linearRampToValueAtTime(0.5, time + 0.008); // Reduced from 0.7 to 0.5
+        noteGain.gain.exponentialRampToValueAtTime(0.01, time + duration + 0.05); // Longer tail
 
         // Filter envelope with smooth start
         this.filter.frequency.setTargetAtTime(2000, time, 0.01); // Smoothed from setValueAtTime
@@ -262,8 +262,8 @@ export class BreitemaEngine extends AbstractSynthEngine {
         // Start and stop
         carrier.start(time);
         modulator.start(time);
-        carrier.stop(time + duration + 0.1);
-        modulator.stop(time + duration + 0.1);
+        carrier.stop(time + duration + 0.2); // Extended stop time
+        modulator.stop(time + duration + 0.2);
     }
 
     /**
