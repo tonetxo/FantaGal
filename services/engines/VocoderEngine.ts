@@ -12,7 +12,12 @@ export class VocoderEngine extends AbstractSynthEngine {
     private readonly NUM_BANDS = 12;
     private modulatorBands: BiquadFilterNode[] = [];
     private carrierBands: BiquadFilterNode[] = [];
-    private envelopeFollowers: { analyser: AnalyserNode; gain: GainNode }[] = [];
+    private envelopeFollowers: {
+        analyser: AnalyserNode;
+        gain: GainNode;
+        baseGain: number;
+        maxGain: number;
+    }[] = [];
 
     // Audio nodes
     private micStream: MediaStream | null = null;
@@ -64,11 +69,12 @@ export class VocoderEngine extends AbstractSynthEngine {
         this.internalCarrierGain = ctx.createGain();
         this.internalCarrierGain.gain.value = 0.3; // Reduced to prevent overpowering modulation
 
+        // Vocoder output (from carrier bands)
         this.dryGain = ctx.createGain();
-        this.dryGain.gain.value = 1.5; // Adjusted for better balance
+        this.dryGain.gain.value = 1.0; // Dry vocoder output (no reverb)
 
         this.wetGain = ctx.createGain();
-        this.wetGain.gain.value = 1.5; // Adjusted for better balance
+        this.wetGain.gain.value = 0.5; // Wet vocoder output (with reverb)
 
         // Create massive reverb (the "caves")
         this.reverb = ctx.createConvolver();
@@ -89,8 +95,8 @@ export class VocoderEngine extends AbstractSynthEngine {
             this.micGain!.connect(band);
         });
 
-        // Also connect micGain to the output for direct monitoring if needed
-        this.micGain!.connect(this.dryGain!);
+        // NOTE: micGain should NOT connect to output! 
+        // The modulator is only for envelope detection, never for audio output.
 
         // Audio routing:
         // Internal Carrier -> Vocoder Carrier Bands -> Controlled by Mic Envelope -> Output
@@ -101,7 +107,7 @@ export class VocoderEngine extends AbstractSynthEngine {
         this.wetGain.connect(this.reverb);
         this.reverb.connect(masterGain);
 
-        // Connect dry path (direct mic signal)
+        // Connect dry path (vocoder output without reverb)
         this.dryGain.connect(masterGain);
 
         // Connect master to analyser and then to masterBus (no internal compressor)
@@ -213,8 +219,8 @@ export class VocoderEngine extends AbstractSynthEngine {
             this.envelopeFollowers.push({
                 analyser: modAnalyser,
                 gain: carrierGain,
-                baseGain: 0.01,
-                maxGain: 5.0
+                baseGain: 0.0001, // Extremely low to prevent leakage
+                maxGain: 8.0     // Boosted presence
             });
         }
 
@@ -237,46 +243,52 @@ export class VocoderEngine extends AbstractSynthEngine {
         const update = () => {
             // Update gain for each band based on modulator amplitude
             let totalRms = 0;
-            this.envelopeFollowers.forEach(({ analyser, gain, baseGain, maxGain }, index) => {
+            this.envelopeFollowers.forEach(({ analyser, gain, baseGain, maxGain }) => {
                 if (!this.isPlayingBuffer) {
-                    // When not playing buffer, silence the output
-                    gain.gain.setTargetAtTime(baseGain!, ctx.currentTime, 0.05); // Keep minimal gain to prevent clicks
+                    gain.gain.setTargetAtTime(0, ctx.currentTime, 0.05);
                     return;
                 }
 
-                const dataArray = new Uint8Array(analyser.frequencyBinCount);
-                analyser.getByteTimeDomainData(dataArray);
+                // Use Float32Array for better precision
+                const dataArray = new Float32Array(analyser.fftSize);
+                analyser.getFloatTimeDomainData(dataArray);
 
-                // Calculate RMS amplitude (this is the envelope)
+                // Calculate RMS amplitude (envelope)
                 let sum = 0;
                 for (let i = 0; i < dataArray.length; i++) {
-                    const normalized = (dataArray[i] - 128) / 128;
-                    sum += normalized * normalized;
+                    sum += dataArray[i] * dataArray[i];
                 }
                 const rms = Math.sqrt(sum / dataArray.length);
                 totalRms += rms;
 
-                // Apply to carrier band gain - adjusted for better voice intelligibility
-                // Use more sensitive scaling to make modulation more audible
-                const minGain = baseGain || 0.01; // Small minimum to prevent complete silence
+                // AGGRESSIVE NOISE GATE
+                // If signal is below threshold, drop it to zero immediately
+                const gateThreshold = 0.025;
+                let effectiveRms = 0;
 
-                // Noise gate to prevent background hiss from opening bands
-                let effectiveRms = rms;
-                if (effectiveRms < 0.02) effectiveRms = 0.01; // Lower gate threshold for more sensitivity
+                if (rms > gateThreshold) {
+                    // Non-linear scaling: amplify higher amplitudes more to emphasize speech formants
+                    // We normalize the range above threshold and apply a slight power curve
+                    effectiveRms = Math.pow((rms - gateThreshold) / (1.0 - gateThreshold), 0.8);
+                }
 
-                // Multiplier adjusted for better voice modulation
-                const sensitivity = 250; // Increased sensitivity
-                const modulatedGain = Math.min(maxGain || 3.0, Math.max(minGain, effectiveRms * sensitivity));
+                // Calculate target gain
+                // Base sensitivity is high to make small voice nuances trigger the bands
+                const sensitivity = 400;
+                let targetGain = baseGain + effectiveRms * sensitivity;
+                targetGain = Math.min(maxGain, targetGain);
 
-                // Use setTargetAtTime for smoother transitions and less artifacts
-                gain.gain.setTargetAtTime(modulatedGain, ctx.currentTime, 0.015); // Faster response for voice
+                // Strict isolation: if no modulator signal, no carrier output
+                if (effectiveRms === 0) targetGain = 0;
+
+                // Fast attack, slightly slower release to avoid "pumping" but keep it snappy
+                gain.gain.setTargetAtTime(targetGain, ctx.currentTime, 0.012);
             });
 
-            // Log RMS every ~60 frames (approx 1 second)
-            if (this.isPlayingBuffer && logCounter++ % 60 === 0) {
+            // Log RMS every few seconds for debugging
+            if (this.isPlayingBuffer && logCounter++ % 120 === 0) {
                 const avgRms = totalRms / this.envelopeFollowers.length;
-                console.log('[Vocoder] Avg RMS:', avgRms.toFixed(4),
-                    'External carriers:', this.criosferaTap ? 'Criosfera' : '', this.gearheartTap ? 'Gearheart' : '');
+                console.log(`[Vocoder] RMS: ${avgRms.toFixed(4)} | Gate Triggered: ${avgRms > 0.01}`);
             }
 
             this.envelopeAnimationId = requestAnimationFrame(update);
