@@ -109,7 +109,10 @@ const VocoderUI: React.FC<VocoderUIProps> = ({ isActive, engine }) => {
                         const normalized = (dataArray[j] - 128) / 128;
                         sum += normalized * normalized;
                     }
-                    const rms = Math.sqrt(sum / dataArray.length);
+                    let rms = Math.sqrt(sum / dataArray.length);
+
+                    // Safety: prevent NaN/Infinity from audio glitches
+                    if (!isFinite(rms) || isNaN(rms)) rms = 0;
                     newAudioData[i] = rms;
                 });
 
@@ -129,15 +132,18 @@ const VocoderUI: React.FC<VocoderUIProps> = ({ isActive, engine }) => {
                 .filter(wave => wave.intensity > 0.01);
 
             // Add new waves based on audio activity
-            const totalAmplitude = audioDataRef.current.reduce((sum, val) => sum + val, 0) / audioDataRef.current.length;
+            let totalAmplitude = audioDataRef.current.reduce((sum, val) => sum + val, 0) / audioDataRef.current.length;
+            if (!isFinite(totalAmplitude) || isNaN(totalAmplitude)) totalAmplitude = 0;
+
             if (totalAmplitude > 0.1 && Math.random() < totalAmplitude * 5) {
-                const avgFreq = audioDataRef.current.reduce((sum, val, idx) => sum + val * idx, 0) /
-                    Math.max(0.001, audioDataRef.current.reduce((sum, val) => sum + val, 0));
+                const totalVal = audioDataRef.current.reduce((sum, val) => sum + val, 0);
+                const weightSum = audioDataRef.current.reduce((sum, val, idx) => sum + val * idx, 0);
+                const avgFreq = totalVal > 0.001 ? weightSum / totalVal : 0;
 
                 concentricWavesRef.current.push({
                     radius: 50,
                     intensity: totalAmplitude,
-                    frequency: 2 + avgFreq * 3
+                    frequency: 2 + (isFinite(avgFreq) ? avgFreq : 0) * 3
                 });
             }
 

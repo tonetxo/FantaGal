@@ -9,7 +9,7 @@ import { createReverbImpulse, createNoiseBuffer, normalizeBuffer } from '../audi
  */
 export class VocoderEngine extends AbstractSynthEngine {
     // Vocoder bands
-    private readonly NUM_BANDS = 12;
+    private readonly NUM_BANDS = 16; // Increased resolution for better clarity (nitidez)
     private modulatorBands: BiquadFilterNode[] = [];
     private carrierBands: BiquadFilterNode[] = [];
     private envelopeFollowers: {
@@ -57,11 +57,11 @@ export class VocoderEngine extends AbstractSynthEngine {
         const masterGain = this.getMasterGain();
         if (!ctx || !masterGain) return;
 
-        masterGain.gain.value = 1.5; // Increased for vocoder audibility
+        masterGain.gain.value = 1.0; // Reduced from 1.5 to prevent distortion
 
         // Create gain nodes
         this.micGain = ctx.createGain();
-        this.micGain.gain.value = 3.0; // Increased to make voice input more prominent
+        this.micGain.gain.value = 2.0; // Slightly reduced to avoid input over-driving filter banks
 
         this.carrierGain = ctx.createGain();
         this.carrierGain.gain.value = 1.0;
@@ -133,15 +133,19 @@ export class VocoderEngine extends AbstractSynthEngine {
         this.internalNoise.connect(this.internalCarrierGain);
         this.internalNoise.start();
 
-        // Add harmonic oscillators for tonal content - more appropriate for speech
-        const harmonics = [100, 200, 300, 400, 500, 600]; // Richer harmonic content
-        this.internalOscillators = []; // Clear any old references
-        harmonics.forEach(freq => {
+        // Simplified richer carrier - focus on strong harmonics
+        const baseFreqs = [100, 200, 300, 400, 600, 800, 1200];
+        this.internalOscillators = [];
+
+        baseFreqs.forEach((freq) => {
             const osc = ctx.createOscillator();
-            osc.type = 'sawtooth'; // Sawtooth has richer harmonics for vocoding
+            osc.type = 'sawtooth';
             osc.frequency.value = freq;
+            osc.detune.value = (Math.random() * 6 - 3); // Subtle detune
+
             const gain = ctx.createGain();
-            gain.gain.value = 0.15 / harmonics.length; // Slightly reduced to balance with noise
+            gain.gain.value = 0.2 / baseFreqs.length;
+
             osc.connect(gain);
             gain.connect(this.internalCarrierGain!);
             osc.start();
@@ -177,15 +181,14 @@ export class VocoderEngine extends AbstractSynthEngine {
         const ctx = this.getContext();
         if (!ctx) return;
 
-        // Create frequency bands optimized for human speech (formant frequencies)
-        // Standard formant frequencies: F1 (~200-1000Hz), F2 (~800-2500Hz), F3 (~2000-4000Hz)
-        const minFreq = 80;   // Lower for better bass response
-        const maxFreq = 8000; // Higher frequencies for sibilance
-        const ratio = Math.pow(maxFreq / minFreq, 1 / this.NUM_BANDS);
+        // Logarithmic distribution optimized for vocal clarity
+        const minFreq = 180;
+        const maxFreq = 6000;
+        const ratio = Math.pow(maxFreq / minFreq, 1 / (this.NUM_BANDS - 1));
 
         for (let i = 0; i < this.NUM_BANDS; i++) {
             const freq = minFreq * Math.pow(ratio, i);
-            const bandwidth = freq * 1.0; // Tighter bandwidth for cleaner spectral separation
+            const bandwidth = freq * 0.2; // Significantly higher Q (~5.0) for better nitidez
 
             // Modulator band (analyzes mic input) - separate path for envelope detection
             const modFilter = ctx.createBiquadFilter();
@@ -219,8 +222,8 @@ export class VocoderEngine extends AbstractSynthEngine {
             this.envelopeFollowers.push({
                 analyser: modAnalyser,
                 gain: carrierGain,
-                baseGain: 0.0001, // Extremely low to prevent leakage
-                maxGain: 8.0     // Boosted presence
+                baseGain: 0.0001,
+                maxGain: 6.0     // Restored volume headroom
             });
         }
 
@@ -258,7 +261,8 @@ export class VocoderEngine extends AbstractSynthEngine {
                 for (let i = 0; i < dataArray.length; i++) {
                     sum += dataArray[i] * dataArray[i];
                 }
-                const rms = Math.sqrt(sum / dataArray.length);
+                const rmsRaw = Math.sqrt(sum / dataArray.length);
+                const rms = isFinite(rmsRaw) && !isNaN(rmsRaw) ? rmsRaw : 0;
                 totalRms += rms;
 
                 // AGGRESSIVE NOISE GATE
@@ -267,22 +271,21 @@ export class VocoderEngine extends AbstractSynthEngine {
                 let effectiveRms = 0;
 
                 if (rms > gateThreshold) {
-                    // Non-linear scaling: amplify higher amplitudes more to emphasize speech formants
-                    // We normalize the range above threshold and apply a slight power curve
-                    effectiveRms = Math.pow((rms - gateThreshold) / (1.0 - gateThreshold), 0.8);
+                    // Non-linear scaling: tighter power curve (1.2) for more "punchy" response
+                    effectiveRms = Math.pow((rms - gateThreshold) / (1.0 - gateThreshold), 1.2);
                 }
 
                 // Calculate target gain
-                // Base sensitivity is high to make small voice nuances trigger the bands
-                const sensitivity = 400;
+                const sensitivity = 350;
                 let targetGain = baseGain + effectiveRms * sensitivity;
                 targetGain = Math.min(maxGain, targetGain);
 
                 // Strict isolation: if no modulator signal, no carrier output
                 if (effectiveRms === 0) targetGain = 0;
 
-                // Fast attack, slightly slower release to avoid "pumping" but keep it snappy
-                gain.gain.setTargetAtTime(targetGain, ctx.currentTime, 0.012);
+                // Precision envelope timing
+                // Very fast attack to catch consonants, slightly longer release for musicality
+                gain.gain.setTargetAtTime(targetGain, ctx.currentTime, 0.010);
             });
 
             // Log RMS every few seconds for debugging
