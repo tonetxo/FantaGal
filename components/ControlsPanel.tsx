@@ -1,5 +1,5 @@
 import React from 'react';
-import { ParameterType, SynthState } from '../types';
+import { EngineName, ParameterType, SynthState } from '../types';
 import ControlSlider from './ControlSlider';
 
 interface Theme {
@@ -10,7 +10,7 @@ interface Theme {
 }
 
 interface ControlsPanelProps {
-  currentEngine: 'criosfera' | 'gearheart' | 'echo-vessel' | 'vocoder' | 'breitema';
+  currentEngine: EngineName;
   theme: Theme;
   state: SynthState;
   isActive: boolean;

@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Preferences } from '@capacitor/preferences';
 import { ParameterType } from './types';
 import { synthManager } from './services/SynthManager';
+import { engineRegistry } from './services/EngineRegistry';
+import { ECHO_VESSEL_VIAL_LABELS } from './services/engines';
 import Visualizer from './components/Visualizer';
 import BubbleXYPad from './components/BubbleXYPad';
 import GearSequencer from './components/GearSequencer';
@@ -22,61 +24,12 @@ const NOTES = [
   { label: 'C4', freq: 261.63 },
 ];
 
-const PARAM_LABELS_CRIOSFERA: Record<string, string> = {
-  pressure: "PRESIÓN",
-  resonance: "RESONANCIA",
-  viscosity: "VISCOSIDADE",
-  turbulence: "TURBULENCIA",
-  diffusion: "DIFUSIÓN"
-};
-
-const PARAM_LABELS_GEARHEART: Record<string, string> = {
-  pressure: "PRESIÓN VAPOR",
-  resonance: "RESONANCIA LATÓN",
-  viscosity: "VELOCIDADE",
-  turbulence: "COMPLEXIDADE",
-  diffusion: "DIFUSIÓN ÉTER"
-};
-
-// Echo Vessel labels change based on selected vial
-const PARAM_LABELS_ECHO_NEUTRAL: Record<string, string> = {
-  pressure: "GANANCIA",
-  resonance: "—",
-  viscosity: "ECO",
-  turbulence: "—",
-  diffusion: "ESPACIALIDADE"
-};
-
-const PARAM_LABELS_ECHO_MERCURY: Record<string, string> = {
-  pressure: "GANANCIA",
-  resonance: "TONO MODULADOR",
-  viscosity: "—",
-  turbulence: "FREQ. MODULACIÓN",
-  diffusion: "ESPACIALIDADE"
-};
-
-const PARAM_LABELS_ECHO_AMBER: Record<string, string> = {
-  pressure: "FEEDBACK DELAY",
-  resonance: "SATURACIÓN",
-  viscosity: "TEMPO DELAY",
-  turbulence: "—",
-  diffusion: "ESPACIALIDADE"
-};
-
-const PARAM_LABELS_VOCODER: Record<string, string> = {
-  pressure: "HUMIDADE DAS COVAS",
-  resonance: "RESONANCIA CRISTALINA",
-  viscosity: "BALANCE PORTADORAS",
-  turbulence: "DESPLAZAMENTO FORMANTE",
-  diffusion: "PROFUNDIDADE CAVERNA"
-};
-
-const PARAM_LABELS_BREITEMA: Record<string, string> = {
-  pressure: "TEMPO",
-  resonance: "PROFUNDIDADE FM",
-  viscosity: "DENSIDADE BRÉTEMA",
-  turbulence: "MOVEMENTO NÉBOA",
-  diffusion: "REVERBERACIÓN"
+// Default theme for fallback
+const DEFAULT_THEME = {
+  bg: 'bg-stone-950',
+  text: 'text-stone-100',
+  accent: 'text-orange-500',
+  border: 'border-stone-800'
 };
 
 function App() {
@@ -108,36 +61,20 @@ function App() {
     y: ParameterType.PRESSURE
   });
 
-  // Labels actuais segundo motor
+  // Labels from registry with Echo Vessel vial support
   const getLabels = () => {
-    switch (currentEngine) {
-      case 'criosfera': return PARAM_LABELS_CRIOSFERA;
-      case 'gearheart': return PARAM_LABELS_GEARHEART;
-      case 'echo-vessel':
-        // Dynamic labels based on selected vial
-        if (echoVial === 'mercury') return PARAM_LABELS_ECHO_MERCURY;
-        if (echoVial === 'amber') return PARAM_LABELS_ECHO_AMBER;
-        return PARAM_LABELS_ECHO_NEUTRAL;
-      case 'vocoder': return PARAM_LABELS_VOCODER;
-      case 'breitema': return PARAM_LABELS_BREITEMA;
-      default: return PARAM_LABELS_CRIOSFERA;
+    if (currentEngine === 'echo-vessel') {
+      return ECHO_VESSEL_VIAL_LABELS[echoVial];
     }
+    const engineDef = engineRegistry.get(currentEngine);
+    return engineDef?.paramLabels || {};
   }
   const labels = getLabels();
 
-  // Theme colors
+  // Theme from registry
   const getTheme = () => {
-    if (currentEngine === 'criosfera') {
-      return { bg: 'bg-stone-950', text: 'text-stone-100', accent: 'text-orange-500', border: 'border-stone-800' };
-    } else if (currentEngine === 'gearheart') {
-      return { bg: 'bg-[#151210]', text: 'text-[#d4c5a9]', accent: 'text-[#ffbf69]', border: 'border-[#b08d55]/30' };
-    } else if (currentEngine === 'vocoder') {
-      return { bg: 'bg-[#0d1117]', text: 'text-emerald-100', accent: 'text-emerald-400', border: 'border-emerald-900/30' };
-    } else if (currentEngine === 'breitema') {
-      return { bg: 'bg-[#0f1318]', text: 'text-[#9faab8]', accent: 'text-[#8be9fd]', border: 'border-[#44475a]/40' };
-    } else {
-      return { bg: 'bg-[#0a0f14]', text: 'text-slate-200', accent: 'text-cyan-500', border: 'border-cyan-900/30' };
-    }
+    const engineDef = engineRegistry.get(currentEngine);
+    return engineDef?.theme || DEFAULT_THEME;
   }
   const theme = getTheme();
 
@@ -163,23 +100,8 @@ function App() {
     const vocoderEngine = synthManager.getVocoderEngine();
     if (!vocoderEngine) return;
 
-    let criosferaTap: GainNode | null = null;
-    let gearheartTap: GainNode | null = null;
-
-    try {
-      // Access internals - safer to add public accessors in SynthManager in future
-      const criosferaEngine = (synthManager as any).engines.get('criosfera');
-      const gearheartEngine = (synthManager as any).engines.get('gearheart');
-
-      if (criosferaEngine && typeof (criosferaEngine as any).getOutputTap === 'function') {
-        criosferaTap = (criosferaEngine as any).getOutputTap() || null;
-      }
-      if (gearheartEngine && typeof (gearheartEngine as any).getOutputTap === 'function') {
-        gearheartTap = (gearheartEngine as any).getOutputTap() || null;
-      }
-    } catch (e) {
-      console.error('[App] Error getting engine taps:', e);
-    }
+    const criosferaTap = synthManager.getEngineTap('criosfera');
+    const gearheartTap = synthManager.getEngineTap('gearheart');
 
     vocoderEngine.setCarrierSources(criosferaTap, gearheartTap);
     console.log('[App] Connected engine taps to vocoder carrier');
@@ -310,18 +232,18 @@ function App() {
               </div>
               <div className="mt-auto w-full max-w-md flex flex-col items-center z-10">
                 <div className="w-full mb-4">
-                  <div className="flex justify-between mb-2 px-2">
+                  <div className="flex justify-center gap-6 mb-2">
                     <select
                       value={xyParams.y}
                       onChange={(e) => setXyParams(prev => ({ ...prev, y: e.target.value as ParameterType }))}
-                      className={`bg-black/60 border ${theme.border} text-[10px] ${theme.accent} uppercase tracking-widest p-1 rounded`}
+                      className={`bg-black/60 border ${theme.border} text-[11px] ${theme.accent} uppercase tracking-wider p-1.5 px-3 rounded min-w-[130px]`}
                     >
                       {Object.values(ParameterType).map(p => <option key={p} value={p}>{labels[p]}</option>)}
                     </select>
                     <select
                       value={xyParams.x}
                       onChange={(e) => setXyParams(prev => ({ ...prev, x: e.target.value as ParameterType }))}
-                      className={`bg-black/60 border ${theme.border} text-[10px] ${theme.accent} uppercase tracking-widest p-1 rounded`}
+                      className={`bg-black/60 border ${theme.border} text-[11px] ${theme.accent} uppercase tracking-wider p-1.5 px-3 rounded min-w-[130px]`}
                     >
                       {Object.values(ParameterType).map(p => <option key={p} value={p}>{labels[p]}</option>)}
                     </select>
@@ -334,19 +256,19 @@ function App() {
                     onChange={(x, y) => { updateParam(xyParams.x, x); updateParam(xyParams.y, y); }}
                   />
                 </div>
-                <div className="w-full grid grid-cols-7 gap-2">
+                <div className="w-full flex justify-center gap-1.5">
                   {NOTES.map((note) => {
                     const isActive = playingFrequencies.has(note.freq);
                     return (
                       <button
                         key={note.label}
                         onClick={() => toggleNote(note.freq)}
-                        className={`h-24 border transition-all flex flex-col items-center justify-end pb-2 rounded-sm active:scale-[0.98] ${isActive
+                        className={`flex-1 max-w-[52px] h-24 border transition-all flex flex-col items-center justify-end pb-2 rounded-sm active:scale-[0.98] ${isActive
                           ? `bg-orange-500/40 border-orange-400 shadow-[0_0_15px_rgba(249,115,22,0.2)]`
                           : `bg-black/40 border-white/10`
                           }`}
                       >
-                        <span className={`text-xl font-bold ${isActive ? 'text-white' : 'opacity-50'}`}>{note.label}</span>
+                        <span className={`text-lg font-bold ${isActive ? 'text-white' : 'opacity-50'}`}>{note.label}</span>
                       </button>
                     );
                   })}

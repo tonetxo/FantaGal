@@ -1,6 +1,6 @@
 import { SynthState } from '../../types';
 import { AbstractSynthEngine } from '../AbstractSynthEngine';
-import { createReverbImpulse, createNoiseBuffer } from '../audioUtils';
+import { createReverbImpulse, createNoiseBuffer, normalizeBuffer } from '../audioUtils';
 
 /**
  * Vocoder das Covas - Cave Vocoder
@@ -355,7 +355,7 @@ export class VocoderEngine extends AbstractSynthEngine {
                     const arrayBuffer = await blob.arrayBuffer();
                     // Decode needs to happen on context
                     this.recordedBuffer = await ctx.decodeAudioData(arrayBuffer);
-                    this.normalizeBuffer(this.recordedBuffer);
+                    normalizeBuffer(this.recordedBuffer);
 
                     // Stop stream tracks
                     stream.getTracks().forEach(track => track.stop());
@@ -382,23 +382,7 @@ export class VocoderEngine extends AbstractSynthEngine {
         this.isRecording = false;
     }
 
-    private normalizeBuffer(buffer: AudioBuffer) {
-        // Simple peak normalization for mono/stereo
-        for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
-            const data = buffer.getChannelData(channel);
-            let maxPeak = 0;
-            for (let i = 0; i < data.length; i++) {
-                if (Math.abs(data[i]) > maxPeak) maxPeak = Math.abs(data[i]);
-            }
 
-            if (maxPeak > 0) {
-                const gain = 0.95 / maxPeak;
-                for (let i = 0; i < data.length; i++) {
-                    data[i] *= gain;
-                }
-            }
-        }
-    }
 
     startPlaybackLoop() {
         if (!this.recordedBuffer) return;

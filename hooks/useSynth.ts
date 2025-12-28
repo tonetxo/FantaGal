@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { ParameterType, SynthState } from '../types';
+import { EngineName, ParameterType, SynthState } from '../types';
 import { synthManager } from '../services/SynthManager';
 import { fetchTitanCondition } from '../services/GeminiService';
 
-export const useSynth = (initialEngine: 'criosfera' | 'gearheart' | 'echo-vessel' | 'vocoder', apiKeyProp: string) => {
-    const [currentEngine, setCurrentEngine] = useState(initialEngine);
+export const useSynth = (initialEngine: EngineName, apiKeyProp: string) => {
+    const [currentEngine, setCurrentEngine] = useState<EngineName>(initialEngine);
     const [initializedEngines, setInitializedEngines] = useState<Set<string>>(new Set());
     const [isAiLoading, setIsAiLoading] = useState(false);
 
@@ -126,7 +126,7 @@ export const useSynth = (initialEngine: 'criosfera' | 'gearheart' | 'echo-vessel
         }
     };
 
-    const switchEngine = (engine: 'criosfera' | 'gearheart' | 'echo-vessel' | 'vocoder' | 'breitema') => {
+    const switchEngine = (engine: EngineName) => {
         setCurrentEngine(engine);
         synthManager.switchEngine(engine);
     };

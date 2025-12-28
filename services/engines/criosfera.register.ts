@@ -3,11 +3,11 @@ import { CriosferaEngine } from './CriosferaEngine';
 
 // Parameter labels for Criosfera
 const PARAM_LABELS = {
-    pressure: "PRESIÓN METÁNICA",
+    pressure: "PRESIÓN",
     resonance: "RESONANCIA",
     viscosity: "VISCOSIDADE",
     turbulence: "TORMENTA",
-    diffusion: "DIFUSIÓN CRIOGÉNICA"
+    diffusion: "DIFUSIÓN"
 };
 
 // Theme for Criosfera

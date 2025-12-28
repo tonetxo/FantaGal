@@ -18,21 +18,7 @@ export function makeDistortionCurve(amount: number, samples: number = 44100): Fl
     return curve as Float32Array<ArrayBuffer>;
 }
 
-/**
- * Crea una curva de distorsión suave (soft clipping).
- * Usada principalmente para percusión.
- * @param amount - Cantidad de distorsión
- * @param samples - Número de muestras
- */
-export function makeSoftDistortionCurve(amount: number, samples: number = 44100): Float32Array<ArrayBuffer> {
-    const k = amount * 100;
-    const curve = new Float32Array(samples);
-    for (let i = 0; i < samples; i++) {
-        const x = (i * 2) / samples - 1;
-        curve[i] = ((1 + k) * x) / (1 + k * Math.abs(x));
-    }
-    return curve as Float32Array<ArrayBuffer>;
-}
+
 
 /**
  * Crea un buffer de impulso para reverb de convolución.
@@ -73,3 +59,26 @@ export function createNoiseBuffer(ctx: AudioContext, duration: number = 2): Audi
     }
     return buffer;
 }
+
+/**
+ * Normaliza un AudioBuffer a un nivel de pico especificado.
+ * @param buffer - Buffer de audio a normalizar (se modifica in-place)
+ * @param targetPeak - Nivel de pico objetivo (0-1, por defecto 0.95 = -0.5dB)
+ */
+export function normalizeBuffer(buffer: AudioBuffer, targetPeak: number = 0.95): void {
+    for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
+        const data = buffer.getChannelData(channel);
+        let maxPeak = 0;
+        for (let i = 0; i < data.length; i++) {
+            if (Math.abs(data[i]) > maxPeak) maxPeak = Math.abs(data[i]);
+        }
+
+        if (maxPeak > 0) {
+            const gain = targetPeak / maxPeak;
+            for (let i = 0; i < data.length; i++) {
+                data[i] *= gain;
+            }
+        }
+    }
+}
+

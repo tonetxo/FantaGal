@@ -7,6 +7,9 @@ export interface SynthState {
   diffusion: number;
 }
 
+/** Tipo central para nombres de motores */
+export type EngineName = 'criosfera' | 'gearheart' | 'echo-vessel' | 'vocoder' | 'breitema';
+
 export interface PlanetaryCondition {
   stormLevel: number;
   temperature: number;

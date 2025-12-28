@@ -165,6 +165,21 @@ class SynthManager {
   }
 
   /**
+   * Get audio output tap from an engine (for use as carrier source in vocoder)
+   * Returns null if engine doesn't exist or doesn't support output tap
+   */
+  getEngineTap(engineName: string): GainNode | null {
+    const engine = this.engines.get(engineName);
+    if (!engine) return null;
+
+    // Check if engine has getOutputTap method
+    if (typeof (engine as any).getOutputTap === 'function') {
+      return (engine as any).getOutputTap() || null;
+    }
+    return null;
+  }
+
+  /**
    * Stop the currently active engine
    */
   stopActiveEngine() {
