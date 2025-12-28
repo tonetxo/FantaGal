@@ -35,14 +35,24 @@ const VocoderUI: React.FC<VocoderUIProps> = ({ isActive, engine }) => {
     // Canvas dimensions with resize handling
     const dimensions = useCanvasDimensions(0.6);
 
-    // Sync state from engine prop
+    // Sync state from engine prop and connect carriers
     useEffect(() => {
         if (engine && isActive) {
             if (engine.getIsRecording()) setStatus('recording');
             else if (engine.getIsPlayingBuffer()) setStatus('playing');
             else setStatus('idle');
+
+            // Connect external carrier sources (Criosfera / Gearheart)
+            // This is crucial for the vocoder to modulate the synth sound
+            const criosferaTap = synthManager.getEngineTap('criosfera');
+            const gearheartTap = synthManager.getEngineTap('gearheart');
+            engine.setCarrierSources(criosferaTap, gearheartTap);
         } else {
             setStatus('idle');
+            // Disconnect sources when inactive to save resources
+            if (engine) {
+                engine.setCarrierSources(null, null);
+            }
         }
     }, [engine, isActive]);
 
