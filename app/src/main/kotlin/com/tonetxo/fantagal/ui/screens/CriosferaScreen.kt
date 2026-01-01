@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tonetxo.fantagal.ui.components.AudioVisualizer
+import com.tonetxo.fantagal.ui.components.EngineHeader
 import com.tonetxo.fantagal.ui.components.ParameterDropdown
 import com.tonetxo.fantagal.ui.components.PianoKeyboard
 import com.tonetxo.fantagal.ui.components.XYPad
@@ -89,34 +90,11 @@ fun CriosferaScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Engine title with status indicator - TAP TO TOGGLE
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable { viewModel.toggleEngine() }
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(
-                                when {
-                                    isEngineActive -> Color(0xFF22C55E) // Green when active
-                                    else -> Color.Gray
-                                }
-                            )
-                    )
-                    Text(
-                        text = "CRIOSFERA",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isEngineActive) {
-                            Color(0xFF22C55E) // Green text when active
-                        } else {
-                            Color.White.copy(alpha = 0.5f)
-                        },
-                        letterSpacing = 1.sp,
-                        modifier = Modifier.padding(start = 8.dp)
-                    )
-                }
+                EngineHeader(
+                    title = "CRIOSFERA",
+                    isActive = isEngineActive,
+                    onToggle = { viewModel.toggleEngine() }
+                )
 
                 // Settings and menu buttons
                 Row {

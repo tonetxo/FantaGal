@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tonetxo.fantagal.viewmodel.SynthViewModel
+import com.tonetxo.fantagal.ui.components.EngineHeader
 import com.tonetxo.fantagal.ui.theme.CriosferaPrimary
 import com.tonetxo.fantagal.ui.theme.StoneSurface
 import kotlinx.coroutines.delay
@@ -152,18 +153,11 @@ fun GearheartScreen(viewModel: SynthViewModel) {
                 .fillMaxWidth()
                 .padding(top = 100.dp) // Increased to clear EngineSelector
         ) {
-            Text(
-                text = "GEARHEART",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = if (isEngineActive) CriosferaPrimary else Color.Gray,
-                modifier = Modifier
-                    .padding(16.dp)
-                    .pointerInput(Unit) {
-                        detectTapGestures {
-                            viewModel.toggleEngine()
-                        }
-                    }
+            EngineHeader(
+                title = "GEARHEART",
+                isActive = isEngineActive,
+                onToggle = { viewModel.toggleEngine() },
+                modifier = Modifier.padding(16.dp)
             )
         }
 
