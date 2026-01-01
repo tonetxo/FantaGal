@@ -87,7 +87,11 @@ private:
 
   // Parameters
   float masterGain_ = 1.0f;
-  float turbulence_ = 0.0f; // Affects decay variability
+  float pressure_ = 0.5f;
+  float resonance_ = 0.5f;
+  float viscosity_ = 0.5f;
+  float turbulence_ = 0.5f;
+  float diffusion_ = 0.5f;
 
   // Reverb
   std::vector<float> reverbBuffer_;

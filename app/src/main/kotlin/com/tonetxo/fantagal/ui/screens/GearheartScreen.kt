@@ -1,5 +1,6 @@
 package com.tonetxo.fantagal.ui.screens
 
+import com.tonetxo.fantagal.audio.SynthEngine
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -35,7 +36,6 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.tonetxo.fantagal.audio.SynthEngine
 import com.tonetxo.fantagal.ui.components.EngineHeader
 import com.tonetxo.fantagal.ui.theme.StoneSurface
 import com.tonetxo.fantagal.audio.SynthState
@@ -97,8 +97,12 @@ fun GearheartScreen(viewModel: SynthViewModel) {
         while (true) {
             if (gears.isNotEmpty()) {
                 // 1. Reset speeds (except motor) - use currentActiveState for latest value
+                // Get the current gearState for parameters
+                val gearState = viewModel.getEngineState(SynthEngine.GEARHEART).value
                 gears[0].isConnected = currentActiveState
-                gears[0].speed = if (currentActiveState) 0.02f else 0f
+                // VELOCIDADE (turbulence) affects motor speed: 0.005 (very slow) to 0.08 (very fast)
+                val motorSpeed = if (currentActiveState) (0.005f + gearState.turbulence * 0.075f) else 0f
+                gears[0].speed = motorSpeed
                 gears[0].depth = 0
             
                 // Reset others unless dragging

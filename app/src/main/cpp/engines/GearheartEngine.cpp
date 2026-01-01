@@ -38,12 +38,14 @@ void GearheartEngine::prepare(int32_t sampleRate, int32_t framesPerBuffer) {
 }
 
 void GearheartEngine::updateParameters(const SynthState &state) {
-  // Basic mapping
-  // Viscosity -> speed (handled in UI mostly, but affects decay here?)
-  // Turbulence -> variability in decay
+  pressure_ = state.pressure;
+  resonance_ = state.resonance;
+  viscosity_ = state.viscosity;
   turbulence_ = state.turbulence;
-  // Balanced master gain - kick needs headroom
-  masterGain_ = 0.5f + state.pressure * 0.3f;
+  diffusion_ = state.diffusion;
+
+  // Master gain depends on pressure (0.3 - 0.9 range)
+  masterGain_ = 0.3f + pressure_ * 0.6f;
 }
 
 void GearheartEngine::updateGear(int32_t id, float speed, bool isConnected,
@@ -125,10 +127,13 @@ void GearheartEngine::process(float *output, int32_t numFrames) {
     float reverbSample = reverbBuffer_[readIndex];
 
     // Simple dampening reverb
-    reverbBuffer_[reverbWriteIndex_] = mix * 0.4f + reverbSample * 0.7f;
+    // Feed = 0.5 + resonance scaling
+    float feedback = 0.4f + resonance_ * 0.45f;
+    reverbBuffer_[reverbWriteIndex_] = mix * 0.3f + reverbSample * feedback;
     reverbWriteIndex_ = (reverbWriteIndex_ + 1) % reverbBuffer_.size();
 
-    float finalMix = mix + reverbSample * 0.3f;
+    // Reverb Mix
+    float finalMix = mix + reverbSample * (resonance_ * 0.6f);
     finalMix = softClip(finalMix * masterGain_);
 
     output[frame * 2] = finalMix;
@@ -168,24 +173,31 @@ void GearheartEngine::triggerSound(const AudioGear &gear) {
   // Gold (id=3) -> SNARE
   // Bronze, Copper -> TOM (with different pitches)
 
+  // LUBRICACIÓN (viscosity) affects decay: lower viscosity (closer to 0) =
+  // shorter decay, higher viscosity (closer to 1) = longer decay (more
+  // lubricated/smooth). VELOCIDADE (turbulence) adds randomized variability to
+  // the decay.
+  float baseDecayFactor = 0.2f + viscosity_ * 1.5f;
+  float jitter = (generateNoise() * turbulence_ * 0.4f);
+  float decayScale = std::max(0.1f, baseDecayFactor + jitter);
+
+  // Determine Instrument by material first, then by ID
   if (gear.id == 0) {
-    // Motor is always kick
     voice->type = InstrumentType::KICK;
-    voice->envDecay = 0.4f + turbulence_ * 0.3f;
+    voice->envDecay = 0.3f * decayScale;
   } else if (gear.material == 4) { // Platinum
     voice->type = InstrumentType::HIHAT;
-    voice->envDecay = 0.08f;
+    voice->envDecay = 0.05f * decayScale;
   } else if (gear.material == 3) { // Gold
     voice->type = InstrumentType::SNARE;
-    voice->envDecay = 0.2f;
+    voice->envDecay = 0.15f * decayScale;
   } else {
-    // Bronze, Copper, etc. -> TOM
     voice->type = InstrumentType::TOM;
     // Frequency based on radius: smaller = higher pitch
     float norm = 1.0f - ((gear.radius - 20.0f) / 100.0f);
     norm = std::clamp(norm, 0.0f, 1.0f);
     voice->frequency = 80.0f + norm * 200.0f; // 80-280 Hz range
-    voice->envDecay = 0.25f + turbulence_ * 0.15f;
+    voice->envDecay = 0.2f * decayScale;
   }
 }
 
@@ -253,7 +265,15 @@ float GearheartEngine::synthesizeKick(GearVoice &v) {
   }
 
   // Moderate gains with tanh saturation to prevent distortion
-  return (sine * subEnv * 1.5f + tri * clickEnv * 1.0f) * v.gain;
+  float out = (sine * subEnv * 1.5f + tri * clickEnv * 1.0f) * v.gain;
+
+  // Diffusion adds metallic noise
+  if (diffusion_ > 0.05f) {
+    float noiseAmount = diffusion_ * 0.4f * subEnv;
+    out += lowpass(generateNoise() * noiseAmount, 2000.0f, v.noiseFilterState);
+  }
+
+  return out;
 }
 
 float GearheartEngine::synthesizeTom(GearVoice &v) {
@@ -277,9 +297,17 @@ float GearheartEngine::synthesizeTom(GearVoice &v) {
 
   // Volume based on frequency (lower = louder)
   float freqFactor = std::max(0.0f, 1.0f - (v.frequency / 500.0f));
-  float baseVol = 1.0f + freqFactor * 1.5f; // Increased from 0.3 + 0.5
+  float baseVol = 1.0f + freqFactor * 1.5f;
 
-  return sine * env * baseVol * v.gain;
+  float out = sine * env * baseVol * v.gain;
+
+  // Diffusion adds metallic texture to Toms
+  if (diffusion_ > 0.1f) {
+    float noiseAmount = diffusion_ * 0.3f * env;
+    out += highpass(generateNoise() * noiseAmount, 1200.0f, v.noiseFilterState);
+  }
+
+  return out;
 }
 
 float GearheartEngine::synthesizeHiHat(GearVoice &v) {
