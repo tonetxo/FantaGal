@@ -1,39 +1,48 @@
 package com.tonetxo.fantagal.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.tonetxo.fantagal.ui.components.ControlSlider
-import com.tonetxo.fantagal.ui.components.VirtualKeyboard
-import com.tonetxo.fantagal.ui.theme.CryogenicBlue
-import com.tonetxo.fantagal.ui.theme.DeepOcean
+import androidx.compose.ui.unit.sp
+import com.tonetxo.fantagal.ui.components.AudioVisualizer
+import com.tonetxo.fantagal.ui.components.EngineSelector
+import com.tonetxo.fantagal.ui.components.ParameterDropdown
+import com.tonetxo.fantagal.ui.components.PianoKeyboard
+import com.tonetxo.fantagal.ui.components.XYPad
+import com.tonetxo.fantagal.ui.theme.CriosferaPrimary
+import com.tonetxo.fantagal.ui.theme.StoneBackground
 import com.tonetxo.fantagal.viewmodel.SynthViewModel
 
 /**
- * CriosferaScreen - Main UI for the Criosfera engine
- *
- * Deep resonance physical modeling synthesizer
- * simulating giant organic pipes in cryogenic methane oceans.
+ * Complete Criosfera screen matching original design
  */
 @Composable
 fun CriosferaScreen(
@@ -41,117 +50,166 @@ fun CriosferaScreen(
     modifier: Modifier = Modifier
 ) {
     val synthState by viewModel.synthState.collectAsState()
+    val currentEngine by viewModel.currentEngine.collectAsState()
     val isPlaying by viewModel.isPlaying.collectAsState()
+    val isEngineActive by viewModel.isEngineActive.collectAsState()
+    val activeNotes by viewModel.activeNotes.collectAsState()
+
+    // XY pad parameter selection
+    val parameters = listOf("Presión", "Resonancia", "Viscosidade", "Turbulencia", "Difusión")
+    var xParam by remember { mutableStateOf("Resonancia") }
+    var yParam by remember { mutableStateOf("Presión") }
+
+    // XY values mapped to selected parameters
+    var xValue by remember { mutableStateOf(synthState.resonance) }
+    var yValue by remember { mutableStateOf(synthState.pressure) }
 
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(DeepOcean, CryogenicBlue)
-                )
-            )
+            .background(StoneBackground)
     ) {
+        // Background visualizer
+        AudioVisualizer(
+            turbulence = synthState.turbulence,
+            viscosity = synthState.viscosity,
+            pressure = synthState.pressure,
+            modifier = Modifier.fillMaxSize()
+        )
+
+        // Content overlay
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .padding(top = 48.dp) // Space for engine selector
         ) {
-            // Title
-            Text(
-                text = "CRIOSFERA ARMÓNICA",
-                style = MaterialTheme.typography.displayLarge,
-                color = MaterialTheme.colorScheme.primary,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 32.dp)
-            )
-
-            Text(
-                text = "Océanos de Metano Criogénico",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 8.dp, bottom = 24.dp)
-            )
-
-            // Playing indicator
-            if (isPlaying) {
-                Text(
-                    text = "♫ RESONANDO ♫",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.tertiary,
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-            }
-
-            // Controls card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)
-                )
+            // Header row with tappable title to toggle engine
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                // Engine title with status indicator - TAP TO TOGGLE
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable { viewModel.toggleEngine() }
                 ) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(
+                                when {
+                                    isEngineActive -> Color(0xFF22C55E) // Green when active
+                                    else -> Color.Gray
+                                }
+                            )
+                    )
                     Text(
-                        text = "Parámetros de Síntesis",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onSurface
+                        text = "CRIOSFERA",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isEngineActive) {
+                            Color(0xFF22C55E) // Green text when active
+                        } else {
+                            Color.White.copy(alpha = 0.5f)
+                        },
+                        letterSpacing = 1.sp,
+                        modifier = Modifier.padding(start = 8.dp)
                     )
+                }
 
-                    ControlSlider(
-                        label = "Presión",
-                        value = synthState.pressure,
-                        onValueChange = { viewModel.updatePressure(it) }
-                    )
-
-                    ControlSlider(
-                        label = "Resonancia",
-                        value = synthState.resonance,
-                        onValueChange = { viewModel.updateResonance(it) }
-                    )
-
-                    ControlSlider(
-                        label = "Viscosidade",
-                        value = synthState.viscosity,
-                        onValueChange = { viewModel.updateViscosity(it) }
-                    )
-
-                    ControlSlider(
-                        label = "Turbulencia",
-                        value = synthState.turbulence,
-                        onValueChange = { viewModel.updateTurbulence(it) }
-                    )
-
-                    ControlSlider(
-                        label = "Difusión",
-                        value = synthState.diffusion,
-                        onValueChange = { viewModel.updateDiffusion(it) }
-                    )
+                // Settings and menu buttons
+                Row {
+                    IconButton(onClick = { /* Settings */ }) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            tint = CriosferaPrimary.copy(alpha = 0.6f)
+                        )
+                    }
+                    IconButton(onClick = { /* Menu */ }) {
+                        Icon(
+                            imageVector = Icons.Default.Menu,
+                            contentDescription = "Menu",
+                            tint = CriosferaPrimary.copy(alpha = 0.6f)
+                        )
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // Virtual keyboard
-            Text(
-                text = "Teclado Virtual",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.padding(bottom = 8.dp)
+            // Parameter dropdowns
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                ParameterDropdown(
+                    selectedParam = yParam,
+                    options = parameters,
+                    onSelect = { yParam = it }
+                )
+                ParameterDropdown(
+                    selectedParam = xParam,
+                    options = parameters,
+                    onSelect = { xParam = it }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // XY Pad - expanded to fill most of the space
+            XYPad(
+                xValue = xValue,
+                yValue = yValue,
+                xLabel = xParam.uppercase(),
+                yLabel = yParam.uppercase(),
+                onValueChange = { x, y ->
+                    xValue = x
+                    yValue = y
+                    // Map to selected parameters
+                    when (xParam) {
+                        "Presión" -> viewModel.updatePressure(x)
+                        "Resonancia" -> viewModel.updateResonance(x)
+                        "Viscosidade" -> viewModel.updateViscosity(x)
+                        "Turbulencia" -> viewModel.updateTurbulence(x)
+                        "Difusión" -> viewModel.updateDiffusion(x)
+                    }
+                    when (yParam) {
+                        "Presión" -> viewModel.updatePressure(y)
+                        "Resonancia" -> viewModel.updateResonance(y)
+                        "Viscosidade" -> viewModel.updateViscosity(y)
+                        "Turbulencia" -> viewModel.updateTurbulence(y)
+                        "Difusión" -> viewModel.updateDiffusion(y)
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f) // Take all remaining space
+                    .padding(horizontal = 16.dp)
             )
 
-            VirtualKeyboard(
-                onNoteOn = { frequency -> viewModel.noteOn(frequency) },
-                onNoteOff = { frequency -> viewModel.noteOff(frequency) },
-                startOctave = 3
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Piano keyboard with toggle behavior
+            PianoKeyboard(
+                activeNotes = activeNotes,
+                onNoteToggle = { frequency -> viewModel.toggleNote(frequency) },
+                modifier = Modifier.fillMaxWidth()
             )
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(8.dp))
         }
+
+        // Engine selector at top
+        EngineSelector(
+            currentEngine = currentEngine,
+            onEngineChange = { viewModel.switchEngine(it) }
+        )
     }
 }

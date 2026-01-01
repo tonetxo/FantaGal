@@ -29,13 +29,46 @@ class SynthViewModel : ViewModel() {
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
 
-    // Track active notes
-    private val activeNotes = mutableMapOf<Float, Int>()
+    // Engine active state (separate from isPlaying - can have notes but engine muted)
+    private val _isEngineActive = MutableStateFlow(true)
+    val isEngineActive: StateFlow<Boolean> = _isEngineActive.asStateFlow()
+
+    // Track active notes (frequency -> noteId)
+    private val _activeNotes = MutableStateFlow<Set<Float>>(emptySet())
+    val activeNotes: StateFlow<Set<Float>> = _activeNotes.asStateFlow()
+
+    private val noteIdMap = mutableMapOf<Float, Int>()
 
     init {
         // Start the audio engine
         viewModelScope.launch {
             audioBridge.start()
+        }
+    }
+
+    /**
+     * Toggle engine on/off
+     */
+    fun toggleEngine() {
+        _isEngineActive.value = !_isEngineActive.value
+        if (!_isEngineActive.value) {
+            // When turning off, stop all notes
+            allNotesOff()
+        }
+    }
+
+    /**
+     * Toggle a note on/off
+     */
+    fun toggleNote(frequency: Float, velocity: Float = 0.8f) {
+        if (!_isEngineActive.value) return // Don't play if engine is off
+
+        if (_activeNotes.value.contains(frequency)) {
+            // Note is playing, stop it
+            noteOff(frequency)
+        } else {
+            // Note is not playing, start it
+            noteOn(frequency, velocity)
         }
     }
 
@@ -86,8 +119,11 @@ class SynthViewModel : ViewModel() {
      * Play a note (note on)
      */
     fun noteOn(frequency: Float, velocity: Float = 0.8f) {
+        if (!_isEngineActive.value) return
+
         val noteId = audioBridge.playNote(frequency, velocity)
-        activeNotes[frequency] = noteId
+        noteIdMap[frequency] = noteId
+        _activeNotes.value = _activeNotes.value + frequency
         _isPlaying.value = true
     }
 
@@ -95,11 +131,12 @@ class SynthViewModel : ViewModel() {
      * Stop a note (note off)
      */
     fun noteOff(frequency: Float) {
-        activeNotes[frequency]?.let { noteId ->
+        noteIdMap[frequency]?.let { noteId ->
             audioBridge.stopNote(noteId)
-            activeNotes.remove(frequency)
+            noteIdMap.remove(frequency)
         }
-        if (activeNotes.isEmpty()) {
+        _activeNotes.value = _activeNotes.value - frequency
+        if (_activeNotes.value.isEmpty()) {
             _isPlaying.value = false
         }
     }
@@ -108,10 +145,11 @@ class SynthViewModel : ViewModel() {
      * Stop all notes
      */
     fun allNotesOff() {
-        activeNotes.values.forEach { noteId ->
+        noteIdMap.values.forEach { noteId ->
             audioBridge.stopNote(noteId)
         }
-        activeNotes.clear()
+        noteIdMap.clear()
+        _activeNotes.value = emptySet()
         _isPlaying.value = false
     }
 
