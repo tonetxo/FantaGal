@@ -8,12 +8,14 @@ import com.tonetxo.fantagal.audio.SynthState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
  * SynthViewModel - Main ViewModel for the synthesizer
  *
  * Manages UI state and bridges to the native audio engine.
+ * Supports multiple engines running simultaneously with independent activation.
  */
 class SynthViewModel : ViewModel() {
 
@@ -29,9 +31,11 @@ class SynthViewModel : ViewModel() {
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
 
-    // Engine active state - starts OFF (user must tap to activate)
-    private val _isEngineActive = MutableStateFlow(false)
-    val isEngineActive: StateFlow<Boolean> = _isEngineActive.asStateFlow()
+    // Per-engine active states - each engine can be independently enabled
+    private val _engineActiveStates = MutableStateFlow(
+        SynthEngine.entries.associateWith { false }
+    )
+    val engineActiveStates: StateFlow<Map<SynthEngine, Boolean>> = _engineActiveStates.asStateFlow()
 
     // Track active notes (frequency -> noteId)
     private val _activeNotes = MutableStateFlow<Set<Float>>(emptySet())
@@ -47,21 +51,39 @@ class SynthViewModel : ViewModel() {
     }
 
     /**
-     * Toggle engine on/off
+     * Toggle a specific engine on/off
      */
-    fun toggleEngine() {
-        _isEngineActive.value = !_isEngineActive.value
-        if (!_isEngineActive.value) {
-            // When turning off, stop all notes
-            allNotesOff()
+    fun toggleEngine(engine: SynthEngine) {
+        val newState = !isEngineActive(engine)
+        _engineActiveStates.update { states ->
+            states + (engine to newState)
         }
+        audioBridge.setEngineEnabled(engine, newState)
+        // Note: Each engine manages its own state internally
+        // We don't call allNotesOff() here as it would affect other engines
+    }
+
+    /**
+     * Check if a specific engine is active
+     */
+    fun isEngineActive(engine: SynthEngine): Boolean {
+        return _engineActiveStates.value[engine] ?: false
+    }
+
+    /**
+     * Select an engine (for UI focus and note routing)
+     */
+    fun selectEngine(engine: SynthEngine) {
+        _currentEngine.value = engine
+        audioBridge.setSelectedEngine(engine)
     }
 
     /**
      * Toggle a note on/off
      */
     fun toggleNote(frequency: Float, velocity: Float = 0.8f) {
-        if (!_isEngineActive.value) return // Don't play if engine is off
+        // Check if the currently selected engine is active
+        if (!isEngineActive(_currentEngine.value)) return
 
         if (_activeNotes.value.contains(frequency)) {
             // Note is playing, stop it
@@ -108,18 +130,11 @@ class SynthViewModel : ViewModel() {
     }
 
     /**
-     * Switch synth engine
-     */
-    fun switchEngine(engine: SynthEngine) {
-        _currentEngine.value = engine
-        audioBridge.switchEngine(engine)
-    }
-
-    /**
      * Play a note (note on)
      */
     fun noteOn(frequency: Float, velocity: Float = 0.8f) {
-        if (!_isEngineActive.value) return
+        // Check if current engine is active
+        if (!isEngineActive(_currentEngine.value)) return
 
         val noteId = audioBridge.playNote(frequency, velocity)
         noteIdMap[frequency] = noteId

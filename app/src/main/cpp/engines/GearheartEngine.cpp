@@ -23,7 +23,8 @@ void GearheartEngine::updateParameters(const SynthState &state) {
   // Viscosity -> speed (handled in UI mostly, but affects decay here?)
   // Turbulence -> variability in decay
   turbulence_ = state.turbulence;
-  masterGain_ = 1.0f + state.pressure * 1.0f; // Boost gain
+  masterGain_ =
+      0.3f + state.pressure * 0.2f; // Reduced gain to prevent distortion
 }
 
 void GearheartEngine::updateGear(int32_t id, float speed, bool isConnected,

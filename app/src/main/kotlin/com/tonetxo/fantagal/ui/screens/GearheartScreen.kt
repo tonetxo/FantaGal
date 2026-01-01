@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,6 +29,7 @@ import com.tonetxo.fantagal.ui.components.EngineHeader
 import com.tonetxo.fantagal.ui.theme.CriosferaPrimary
 import com.tonetxo.fantagal.ui.theme.StoneSurface
 import kotlinx.coroutines.delay
+import com.tonetxo.fantagal.audio.SynthEngine
 import kotlin.math.*
 
 // Materials
@@ -55,7 +57,14 @@ data class Gear(
 
 @Composable
 fun GearheartScreen(viewModel: SynthViewModel) {
-    val isEngineActive by viewModel.isEngineActive.collectAsState()
+    val engineStates by viewModel.engineActiveStates.collectAsState()
+    val isEngineActive = engineStates[SynthEngine.GEARHEART] ?: false
+    
+    // Use rememberUpdatedState to always get the latest value inside coroutine
+    val currentActiveState by rememberUpdatedState(isEngineActive)
+    
+    // Frame counter to force recomposition (since Gear properties aren't observable)
+    var frameCounter by remember { mutableStateOf(0L) }
     
     // Initial gears
     val gears = remember {
@@ -71,19 +80,13 @@ fun GearheartScreen(viewModel: SynthViewModel) {
     // Physics Loop for UI Animation & Logic
     LaunchedEffect(Unit) {
         while (true) {
-            val dt = 16f // ~60fps
-            
-            // 1. Reset speeds (except motor)
-            gears[0].isConnected = isEngineActive
-            gears[0].speed = if (isEngineActive) 0.02f else 0f
+            // 1. Reset speeds (except motor) - use currentActiveState for latest value
+            gears[0].isConnected = currentActiveState
+            gears[0].speed = if (currentActiveState) 0.02f else 0f
             gears[0].depth = 0
             
             for (i in 1 until gears.size) {
-                if (gears[i].isDragging) {
-                    gears[i].isConnected = false
-                    gears[i].speed = 0f
-                    gears[i].depth = 999
-                } else {
+                if (!gears[i].isDragging) {
                     gears[i].isConnected = false
                     gears[i].speed = 0f
                     gears[i].depth = 999
@@ -136,6 +139,9 @@ fun GearheartScreen(viewModel: SynthViewModel) {
                 gear.angle += gear.speed
             }
             
+            // Force recomposition
+            frameCounter++
+            
             delay(16)
         }
     }
@@ -146,22 +152,7 @@ fun GearheartScreen(viewModel: SynthViewModel) {
             .fillMaxSize()
             .background(StoneSurface)
     ) {
-        
-        // Header (reused logic visually)
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 100.dp) // Increased to clear EngineSelector
-        ) {
-            EngineHeader(
-                title = "GEARHEART",
-                isActive = isEngineActive,
-                onToggle = { viewModel.toggleEngine() },
-                modifier = Modifier.padding(16.dp)
-            )
-        }
-
-        // Gears Canvas
+        // Gears Canvas - reading frameCounter inside draw scope forces redraw
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
@@ -170,10 +161,7 @@ fun GearheartScreen(viewModel: SynthViewModel) {
                         onDragStart = { offset ->
                             // Find clicked gear (reverse order to pick top)
                             for (i in gears.indices.reversed()) {
-                                if (gears[i].id == 0) continue // Motor is fixed? Let's say yes for now or no
-                                // Actually original allowed moving motor. Let's fix motor for simplicity or allow?
-                                // Let's allow moving all except maybe restrict motor to bottom area?
-                                // Original code: motor fixed at bottom center initially but updated via config.
+                                if (gears[i].id == 0) continue // Motor is fixed
                                 
                                 val dx = offset.x - gears[i].x
                                 val dy = offset.y - gears[i].y
@@ -197,6 +185,10 @@ fun GearheartScreen(viewModel: SynthViewModel) {
                     )
                 }
         ) {
+            // Reference frameCounter to force redraw on each tick
+            @Suppress("UNUSED_VARIABLE")
+            val tick = frameCounter
+            
             gears.forEach { gear ->
                 val center = Offset(gear.x, gear.y)
                 
@@ -244,6 +236,21 @@ fun GearheartScreen(viewModel: SynthViewModel) {
                     )
                 }
             }
+        }
+        
+        // Header (top layer for clicks, but only covers its own area)
+        Column(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .wrapContentHeight()
+                .padding(top = 100.dp) // Increased to clear EngineSelector
+        ) {
+            EngineHeader(
+                title = "GEARHEART",
+                isActive = isEngineActive,
+                onToggle = { viewModel.toggleEngine(SynthEngine.GEARHEART) },
+                modifier = Modifier.padding(16.dp)
+            )
         }
     }
 }

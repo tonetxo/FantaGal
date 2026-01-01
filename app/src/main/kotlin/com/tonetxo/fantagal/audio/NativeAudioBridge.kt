@@ -16,7 +16,8 @@ class NativeAudioBridge {
     // JNI methods
     private external fun nativeInit()
     private external fun nativeStop()
-    private external fun nativeSwitchEngine(engineType: Int)
+    private external fun nativeSetEngineEnabled(engineType: Int, enabled: Boolean)
+    private external fun nativeSetSelectedEngine(engineType: Int)
     private external fun nativeUpdateParameters(
         pressure: Float,
         resonance: Float,
@@ -44,14 +45,23 @@ class NativeAudioBridge {
     }
 
     /**
-     * Switch to a different synth engine
+     * Enable or disable a synth engine
+     * Multiple engines can be enabled simultaneously
      */
-    fun switchEngine(engine: SynthEngine) {
-        nativeSwitchEngine(engine.ordinal)
+    fun setEngineEnabled(engine: SynthEngine, enabled: Boolean) {
+        nativeSetEngineEnabled(engine.ordinal, enabled)
     }
 
     /**
-     * Update synth parameters
+     * Set the currently selected engine for note routing
+     * Notes from the keyboard will be sent to this engine
+     */
+    fun setSelectedEngine(engine: SynthEngine) {
+        nativeSetSelectedEngine(engine.ordinal)
+    }
+
+    /**
+     * Update synth parameters (applies to all engines)
      */
     fun updateParameters(state: SynthState) {
         nativeUpdateParameters(
@@ -64,7 +74,7 @@ class NativeAudioBridge {
     }
 
     /**
-     * Play a note
+     * Play a note on the selected engine
      * @return Note ID for later stopping
      */
     fun playNote(frequency: Float, velocity: Float = 0.8f): Int {

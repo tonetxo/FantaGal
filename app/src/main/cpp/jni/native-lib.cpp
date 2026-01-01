@@ -28,14 +28,26 @@ Java_com_tonetxo_fantagal_audio_NativeAudioBridge_nativeStop(JNIEnv *env,
 }
 
 /**
- * Switch to a different synth engine
- * @param engineType 0 = Criosfera, 1 = Gearheart, etc.
+ * Enable or disable an engine
+ * @param engineType Engine index (0-4)
+ * @param enabled Whether the engine should produce audio
  */
 JNIEXPORT void JNICALL
-Java_com_tonetxo_fantagal_audio_NativeAudioBridge_nativeSwitchEngine(
+Java_com_tonetxo_fantagal_audio_NativeAudioBridge_nativeSetEngineEnabled(
+    JNIEnv *env, jobject thiz, jint engineType, jboolean enabled) {
+  LOGI("Setting engine %d enabled: %s", engineType, enabled ? "true" : "false");
+  NativeAudioEngine::getInstance().setEngineEnabled(engineType, enabled);
+}
+
+/**
+ * Set the currently selected engine for UI focus (note routing)
+ * @param engineType Engine index (0-4)
+ */
+JNIEXPORT void JNICALL
+Java_com_tonetxo_fantagal_audio_NativeAudioBridge_nativeSetSelectedEngine(
     JNIEnv *env, jobject thiz, jint engineType) {
-  LOGI("Switching to engine: %d", engineType);
-  NativeAudioEngine::getInstance().switchEngine(engineType);
+  LOGI("Setting selected engine: %d", engineType);
+  NativeAudioEngine::getInstance().setSelectedEngine(engineType);
 }
 
 /**

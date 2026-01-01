@@ -1,6 +1,10 @@
 #include "NativeAudioEngine.h"
 #include "engines/CriosferaEngine.h"
+#include "engines/GearheartEngine.h"
+#include <algorithm>
 #include <android/log.h>
+#include <cmath>
+#include <cstring>
 
 #define LOG_TAG "NativeAudioEngine"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -12,11 +16,22 @@ NativeAudioEngine &NativeAudioEngine::getInstance() {
 }
 
 NativeAudioEngine::NativeAudioEngine() {
-  // Initialize with Criosfera engine by default
-  currentEngine_ = std::make_unique<CriosferaEngine>();
+  // Initialize all engines
+  initializeEngines();
 }
 
 NativeAudioEngine::~NativeAudioEngine() { stop(); }
+
+void NativeAudioEngine::initializeEngines() {
+  engines_[ENGINE_CRIOSFERA] = std::make_unique<CriosferaEngine>();
+  engines_[ENGINE_GEARHEART] = std::make_unique<GearheartEngine>();
+  // Future engines will be initialized here when implemented:
+  // engines_[ENGINE_ECHO_VESSEL] = std::make_unique<EchoVesselEngine>();
+  // engines_[ENGINE_VOCODER] = std::make_unique<VocoderEngine>();
+  // engines_[ENGINE_BREITEMA] = std::make_unique<BreitemaEngine>();
+
+  LOGI("Initialized %d engines (Criosfera, Gearheart)", 2);
+}
 
 bool NativeAudioEngine::start() {
   if (isRunning_)
@@ -71,9 +86,15 @@ void NativeAudioEngine::createStream() {
   sampleRate_ = stream_->getSampleRate();
   framesPerBuffer_ = stream_->getFramesPerBurst();
 
-  // Prepare the engine
-  if (currentEngine_) {
-    currentEngine_->prepare(sampleRate_, framesPerBuffer_);
+  // Allocate mix buffer
+  mixBuffer_.resize(framesPerBuffer_ * channelCount_);
+
+  // Prepare all engines
+  std::lock_guard<std::mutex> lock(engineMutex_);
+  for (int i = 0; i < ENGINE_COUNT; i++) {
+    if (engines_[i]) {
+      engines_[i]->prepare(sampleRate_, framesPerBuffer_);
+    }
   }
 
   LOGI("Stream opened: %d Hz, %d channels, %d frames/burst", sampleRate_,
@@ -85,38 +106,40 @@ void NativeAudioEngine::restartStream() {
   start();
 }
 
-#include "engines/GearheartEngine.h"
-
-// ... (includes remain the same)
-
-void NativeAudioEngine::switchEngine(int engineType) {
-  std::lock_guard<std::mutex> lock(engineMutex_);
-
-  currentEngineType_ = engineType;
-
-  switch (engineType) {
-  case 1:
-    currentEngine_ = std::make_unique<GearheartEngine>();
-    LOGI("Switched to GearheartEngine");
-    break;
-  case 0:
-  default:
-    currentEngine_ = std::make_unique<CriosferaEngine>();
-    LOGI("Switched to CriosferaEngine");
-    break;
+void NativeAudioEngine::setEngineEnabled(int engineType, bool enabled) {
+  if (engineType < 0 || engineType >= ENGINE_COUNT) {
+    LOGE("Invalid engine type: %d", engineType);
+    return;
   }
 
-  if (currentEngine_) {
-    currentEngine_->prepare(sampleRate_, framesPerBuffer_);
-    currentEngine_->updateParameters(currentState_);
+  std::lock_guard<std::mutex> lock(engineMutex_);
+  engineEnabled_[engineType] = enabled;
+  // Note: We don't reset the engine on enable/disable to preserve state
+  // (e.g., gear rotation angles in Gearheart)
+
+  LOGI("Engine %d %s", engineType, enabled ? "enabled" : "disabled");
+}
+
+bool NativeAudioEngine::isEngineEnabled(int engineType) const {
+  if (engineType < 0 || engineType >= ENGINE_COUNT) {
+    return false;
+  }
+  return engineEnabled_[engineType];
+}
+
+void NativeAudioEngine::setSelectedEngine(int engineType) {
+  if (engineType >= 0 && engineType < ENGINE_COUNT) {
+    selectedEngineType_ = engineType;
+    LOGI("Selected engine: %d", engineType);
   }
 }
 
 void NativeAudioEngine::updateGear(int32_t id, float speed, bool isConnected,
                                    int material, float radius) {
-  if (currentEngineType_ == 1 && currentEngine_) {
-    std::lock_guard<std::mutex> lock(engineMutex_);
-    auto *gearheart = static_cast<GearheartEngine *>(currentEngine_.get());
+  std::lock_guard<std::mutex> lock(engineMutex_);
+  if (engines_[ENGINE_GEARHEART]) {
+    auto *gearheart =
+        static_cast<GearheartEngine *>(engines_[ENGINE_GEARHEART].get());
     gearheart->updateGear(id, speed, isConnected, material, radius);
   }
 }
@@ -131,23 +154,40 @@ void NativeAudioEngine::updateParameters(float pressure, float resonance,
   currentState_.diffusion = diffusion;
 
   std::lock_guard<std::mutex> lock(engineMutex_);
-  if (currentEngine_) {
-    currentEngine_->updateParameters(currentState_);
+  // Update all engines with the same parameters
+  for (int i = 0; i < ENGINE_COUNT; i++) {
+    if (engines_[i]) {
+      engines_[i]->updateParameters(currentState_);
+    }
   }
 }
 
 int32_t NativeAudioEngine::playNote(float frequency, float velocity) {
   std::lock_guard<std::mutex> lock(engineMutex_);
-  if (currentEngine_) {
-    return currentEngine_->playNote(frequency, velocity);
+
+  // Play note on the currently selected engine (for keyboard input)
+  if (engines_[selectedEngineType_] && engineEnabled_[selectedEngineType_]) {
+    return engines_[selectedEngineType_]->playNote(frequency, velocity);
   }
+
+  // Fallback: play on first enabled engine
+  for (int i = 0; i < ENGINE_COUNT; i++) {
+    if (engines_[i] && engineEnabled_[i]) {
+      return engines_[i]->playNote(frequency, velocity);
+    }
+  }
+
   return -1;
 }
 
 void NativeAudioEngine::stopNote(int32_t noteId) {
   std::lock_guard<std::mutex> lock(engineMutex_);
-  if (currentEngine_) {
-    currentEngine_->stopNote(noteId);
+
+  // Stop note on all engines (since we don't track which engine played it)
+  for (int i = 0; i < ENGINE_COUNT; i++) {
+    if (engines_[i]) {
+      engines_[i]->stopNote(noteId);
+    }
   }
 }
 
@@ -156,16 +196,47 @@ NativeAudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
                                 int32_t numFrames) {
 
   auto *output = static_cast<float *>(audioData);
+  const int totalSamples = numFrames * channelCount_;
 
-  // Clear buffer
-  memset(output, 0, numFrames * channelCount_ * sizeof(float));
+  // Clear output buffer
+  std::memset(output, 0, totalSamples * sizeof(float));
 
-  // Process audio through current engine
+  // Ensure mix buffer is large enough
+  if (mixBuffer_.size() < static_cast<size_t>(totalSamples)) {
+    mixBuffer_.resize(totalSamples);
+  }
+
+  // Process and mix all enabled engines
   {
     std::lock_guard<std::mutex> lock(engineMutex_);
-    if (currentEngine_) {
-      currentEngine_->process(output, numFrames);
+
+    for (int i = 0; i < ENGINE_COUNT; i++) {
+      if (engines_[i] && engineEnabled_[i]) {
+        // Clear mix buffer for this engine
+        std::memset(mixBuffer_.data(), 0, totalSamples * sizeof(float));
+
+        // Process engine
+        engines_[i]->process(mixBuffer_.data(), numFrames);
+
+        // Add to output
+        for (int j = 0; j < totalSamples; j++) {
+          output[j] += mixBuffer_[j];
+        }
+      }
     }
+  }
+  // Apply master gain and soft clip to prevent distortion
+  const float masterGain =
+      0.6f; // Reduce overall level when mixing multiple engines
+  for (int i = 0; i < totalSamples; i++) {
+    float x = output[i] * masterGain;
+    // Smooth tanh-like soft clip for natural saturation
+    if (x > 0.5f) {
+      x = 0.5f + 0.5f * std::tanh((x - 0.5f) * 2.0f);
+    } else if (x < -0.5f) {
+      x = -0.5f + 0.5f * std::tanh((x + 0.5f) * 2.0f);
+    }
+    output[i] = x;
   }
 
   return oboe::DataCallbackResult::Continue;

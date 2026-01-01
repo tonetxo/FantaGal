@@ -1,15 +1,25 @@
 #pragma once
 
 #include "BaseSynthEngine.h"
+#include <array>
 #include <memory>
 #include <mutex>
 #include <oboe/Oboe.h>
+#include <vector>
+
+// Engine type constants
+constexpr int ENGINE_CRIOSFERA = 0;
+constexpr int ENGINE_GEARHEART = 1;
+constexpr int ENGINE_ECHO_VESSEL = 2;
+constexpr int ENGINE_VOCODER = 3;
+constexpr int ENGINE_BREITEMA = 4;
+constexpr int ENGINE_COUNT = 5;
 
 /**
  * NativeAudioEngine - Central audio manager using Oboe
  *
- * Manages the Oboe audio stream and delegates audio processing
- * to the currently active synth engine.
+ * Manages the Oboe audio stream and processes audio from multiple
+ * synth engines simultaneously, mixing their outputs.
  */
 class NativeAudioEngine : public oboe::AudioStreamCallback {
 public:
@@ -30,24 +40,30 @@ public:
   void stop();
 
   /**
-   * Switch to a different synth engine
-   * @param engineType 0 = Criosfera, 1 = Gearheart, etc.
+   * Enable or disable an engine
+   * @param engineType Engine index (0-4)
+   * @param enabled Whether the engine should produce audio
    */
-  void switchEngine(int engineType);
+  void setEngineEnabled(int engineType, bool enabled);
 
   /**
-   * Update synth parameters
+   * Check if an engine is enabled
+   */
+  bool isEngineEnabled(int engineType) const;
+
+  /**
+   * Update synth parameters (applies to all engines)
    */
   void updateParameters(float pressure, float resonance, float viscosity,
                         float turbulence, float diffusion);
 
   /**
-   * Play a note on the current engine
+   * Play a note on all enabled engines that support it
    */
   int32_t playNote(float frequency, float velocity);
 
   /**
-   * Stop a note on the current engine
+   * Stop a note on all engines
    */
   void stopNote(int32_t noteId);
 
@@ -61,6 +77,11 @@ public:
    */
   void updateGear(int32_t id, float speed, bool isConnected, int material,
                   float radius);
+
+  /**
+   * Set the currently selected engine for UI focus (for note routing)
+   */
+  void setSelectedEngine(int engineType);
 
   // Oboe callback
   oboe::DataCallbackResult onAudioReady(oboe::AudioStream *audioStream,
@@ -79,11 +100,19 @@ private:
 
   void createStream();
   void restartStream();
+  void initializeEngines();
 
   std::shared_ptr<oboe::AudioStream> stream_;
-  std::unique_ptr<BaseSynthEngine> currentEngine_;
+
+  // Multiple engines - all instantiated, individually enabled
+  std::array<std::unique_ptr<BaseSynthEngine>, ENGINE_COUNT> engines_;
+  std::array<bool, ENGINE_COUNT> engineEnabled_ = {false};
+
+  // Temporary buffer for mixing
+  std::vector<float> mixBuffer_;
+
   std::mutex engineMutex_;
-  int currentEngineType_ = 0; // 0=Criosfera, 1=Gearheart
+  int selectedEngineType_ = ENGINE_CRIOSFERA; // For note routing
 
   int32_t sampleRate_ = 48000;
   int32_t framesPerBuffer_ = 256;

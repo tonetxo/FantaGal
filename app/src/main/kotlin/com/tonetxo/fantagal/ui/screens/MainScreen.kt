@@ -35,7 +35,7 @@ fun MainScreen(
         // Navigation Layer at Top - ALWAYS VISIBLE
         EngineSelector(
             currentEngine = currentEngine,
-            onEngineChange = { viewModel.switchEngine(it) },
+            onEngineChange = { viewModel.selectEngine(it) },
             modifier = Modifier.align(Alignment.TopCenter)
         )
     }

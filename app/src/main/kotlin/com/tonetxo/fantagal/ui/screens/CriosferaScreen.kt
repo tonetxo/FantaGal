@@ -40,6 +40,7 @@ import com.tonetxo.fantagal.ui.components.XYPad
 import com.tonetxo.fantagal.ui.theme.CriosferaPrimary
 import com.tonetxo.fantagal.ui.theme.StoneBackground
 import com.tonetxo.fantagal.viewmodel.SynthViewModel
+import com.tonetxo.fantagal.audio.SynthEngine
 
 /**
  * Criosfera specific UI content
@@ -50,7 +51,8 @@ fun CriosferaScreen(
     modifier: Modifier = Modifier
 ) {
     val synthState by viewModel.synthState.collectAsState()
-    val isEngineActive by viewModel.isEngineActive.collectAsState()
+    val engineStates by viewModel.engineActiveStates.collectAsState()
+    val isEngineActive = engineStates[SynthEngine.CRIOSFERA] ?: false
     val activeNotes by viewModel.activeNotes.collectAsState()
 
     // XY pad parameter selection
@@ -93,7 +95,7 @@ fun CriosferaScreen(
                 EngineHeader(
                     title = "CRIOSFERA",
                     isActive = isEngineActive,
-                    onToggle = { viewModel.toggleEngine() }
+                    onToggle = { viewModel.toggleEngine(SynthEngine.CRIOSFERA) }
                 )
 
                 // Settings and menu buttons
