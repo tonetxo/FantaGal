@@ -29,8 +29,8 @@ class SynthViewModel : ViewModel() {
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
 
-    // Engine active state (separate from isPlaying - can have notes but engine muted)
-    private val _isEngineActive = MutableStateFlow(true)
+    // Engine active state - starts OFF (user must tap to activate)
+    private val _isEngineActive = MutableStateFlow(false)
     val isEngineActive: StateFlow<Boolean> = _isEngineActive.asStateFlow()
 
     // Track active notes (frequency -> noteId)

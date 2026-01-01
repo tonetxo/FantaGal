@@ -213,18 +213,20 @@ void CriosferaEngine::updateParameters(const SynthState &state) {
   filterCutoff_ = 12000.0f - state.viscosity * 11500.0f;
   filterCutoff_ = std::clamp(filterCutoff_, 150.0f, 12000.0f);
 
-  // Resonance = filter Q + delay feedback (original: 0.1-0.95 feedback!)
-  filterQ_ = 0.5f + state.resonance * 15.0f;
-  delayFeedback_ = 0.1f + state.resonance * 0.75f; // Max 0.85
+  // Resonance = filter Q + delay feedback (MORE AGGRESSIVE)
+  filterQ_ = 1.0f + state.resonance * 20.0f; // Max Q=21 (very resonant)
+  delayFeedback_ =
+      0.15f + state.resonance * 0.8f; // Max 0.95 (near self-oscillation)
 
-  // Turbulence = LFO speed and depth (original: 0.1-8.1 Hz, 50-1250 Hz depth)
-  lfoSpeed_ = 0.1f + state.turbulence * 8.0f;
-  lfoFilterDepth_ = 50.0f + state.turbulence * 1500.0f;
+  // Turbulence = LFO speed and depth (MORE AGGRESSIVE)
+  lfoSpeed_ = 0.1f + state.turbulence * 12.0f; // Max 12.1 Hz (was 8)
+  lfoFilterDepth_ =
+      100.0f + state.turbulence * 3000.0f; // Max 3100 Hz (was 1550)
 
-  // Diffusion = delay time (original: 0.1-2.5s) and reverb
-  delayTime_ = 0.1f + state.diffusion * 2.0f;   // Max 2.1s delay
-  reverbMix_ = 0.2f + state.diffusion * 0.5f;   // Max 0.7 mix
-  reverbDecay_ = 0.6f + state.diffusion * 0.3f; // Max 0.9 decay
+  // Diffusion = delay time and reverb (MORE AGGRESSIVE)
+  delayTime_ = 0.1f + state.diffusion * 2.5f;    // Max 2.6s delay (was 2.1)
+  reverbMix_ = 0.25f + state.diffusion * 0.65f;  // Max 0.9 mix (was 0.7)
+  reverbDecay_ = 0.65f + state.diffusion * 0.3f; // Max 0.95 decay (was 0.9)
 
   float releaseTime = 1.0f + state.viscosity * 2.0f;
   for (auto &voice : voices_) {

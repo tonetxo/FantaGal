@@ -81,7 +81,7 @@ fun CriosferaScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 48.dp) // Space for engine selector
+                .padding(top = 60.dp) // Space for engine selector
         ) {
             // Header row with tappable title to toggle engine
             Row(
