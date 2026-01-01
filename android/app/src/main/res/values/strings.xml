@@ -1,7 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<resources>
-    <string name="app_name">Criosfera Armónica</string>
-    <string name="title_activity_main">Criosfera Armónica</string>
-    <string name="package_name">com.tonetxo.criosfera</string>
-    <string name="custom_url_scheme">com.tonetxo.criosfera</string>
-</resources>
