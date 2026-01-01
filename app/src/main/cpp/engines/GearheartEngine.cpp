@@ -1,10 +1,26 @@
 #include "GearheartEngine.h"
 #include <algorithm>
+#include <android/log.h>
+#include <cmath>
 #include <cstring>
 
 GearheartEngine::GearheartEngine()
     : rng_(std::random_device{}()), noiseDist_(-1.0f, 1.0f) {
   voices_.resize(MAX_VOICES);
+
+  // Initialize default gear states (matching original TS implementation)
+  // Gear(id, x, y, radius, teeth, angle, speed, isConnected, material)
+  // Adjusted for mobile screen (approx 1080px width)
+  gearStates_[0] = {0,      540.0f, 900.0f, 100.0f, true, 0,
+                    120.0f, 0,      12,     0.0f,   0}; // Motor (Iron)
+  gearStates_[1] = {1,     540.0f, 650.0f, 0.0f, false, 1,
+                    60.0f, 999,    8,      0.0f, 0}; // Bronze
+  gearStates_[2] = {2,     340.0f, 950.0f, 0.0f, false, 2,
+                    50.0f, 999,    6,      0.0f, 0}; // Copper
+  gearStates_[3] = {3,     740.0f, 950.0f, 0.0f, false, 3,
+                    80.0f, 999,    10,     0.0f, 0}; // Gold
+  gearStates_[4] = {4,     540.0f, 400.0f, 0.0f, false, 4,
+                    40.0f, 999,    5,      0.0f, 0}; // Platinum
 }
 
 void GearheartEngine::prepare(int32_t sampleRate, int32_t framesPerBuffer) {
@@ -28,23 +44,36 @@ void GearheartEngine::updateParameters(const SynthState &state) {
 }
 
 void GearheartEngine::updateGear(int32_t id, float speed, bool isConnected,
-                                 int material, float radius) {
+                                 int material, float radius, int depth) {
+  if (id < 0 || id >= GEAR_COUNT)
+    return;
+
+  // Update both the map (for audio) and the array (for UI)
   AudioGear &gear = gears_[id];
   gear.id = id;
   gear.speed = speed;
   gear.isConnected = isConnected;
   gear.material = material;
   gear.radius = radius;
-  // Angle is preserved
+  gear.depth = depth;
+
+  // Sync to gearStates_ for UI persistence
+  gearStates_[id].speed = speed;
+  gearStates_[id].isConnected = isConnected;
+  gearStates_[id].depth = depth;
+  gearStates_[id].angle += speed; // Update animation angle
+}
+
+void GearheartEngine::updateGearPosition(int32_t id, float x, float y) {
+  if (id < 0 || id >= GEAR_COUNT)
+    return;
+  gearStates_[id].x = x;
+  gearStates_[id].y = y;
 }
 
 void GearheartEngine::process(float *output, int32_t numFrames) {
   for (int32_t frame = 0; frame < numFrames; ++frame) {
     // 1. Update Gears & Triggers
-    // We do this per-sample for precision, or per-block?
-    // Per-sample is better for timing, but expensive.
-    // Let's do per-sample to avoid jitter.
-
     float dt = 1.0f / sampleRate_;
 
     for (auto &pair : gears_) {
@@ -63,6 +92,8 @@ void GearheartEngine::process(float *output, int32_t numFrames) {
         int currentRotation = static_cast<int>(gear.angle / TWO_PI);
         if (currentRotation != gear.lastRotation) {
           if (gear.lastRotation != 0) { // Skip initialization trigger
+            // __android_log_print(ANDROID_LOG_INFO, "Gearheart", "Trigger gear
+            // %d", gear.id);
             triggerSound(gear);
           }
           gear.lastRotation = currentRotation;
@@ -115,31 +146,38 @@ void GearheartEngine::triggerSound(const AudioGear &gear) {
   voice->envLevel = 0.0f; // Attack start
   voice->phase = 0.0f;
   voice->phase2 = 0.0f;
-  voice->gain = 1.0f; // Use radius/depth to attenuate in future
 
-  // Determine Instrument
-  // 0=kick(motor), high radius
-  // Material: 3=gold(snare), 4=platinum(hihat)
+  // Depth-based attenuation: further from motor = quieter
+  // Gain = max(0.2, pow(0.85, depth))
+  float attenuation =
+      std::max(0.2f, std::pow(0.85f, static_cast<float>(gear.depth)));
+  voice->gain = attenuation;
 
-  if (gear.id == 0 || gear.radius >= 58.0f) {
+  // Determine Instrument by material first, then by ID
+  // Material: 0=iron, 1=bronze, 2=copper, 3=gold, 4=platinum
+  // Iron (motor, id=0) -> KICK
+  // Platinum (id=4) -> HIHAT
+  // Gold (id=3) -> SNARE
+  // Bronze, Copper -> TOM (with different pitches)
+
+  if (gear.id == 0) {
+    // Motor is always kick
     voice->type = InstrumentType::KICK;
     voice->envDecay = 0.4f + turbulence_ * 0.3f;
   } else if (gear.material == 4) { // Platinum
     voice->type = InstrumentType::HIHAT;
-    voice->envDecay = 0.05f;
+    voice->envDecay = 0.08f;
   } else if (gear.material == 3) { // Gold
     voice->type = InstrumentType::SNARE;
-    voice->envDecay = 0.15f;
+    voice->envDecay = 0.2f;
   } else {
+    // Bronze, Copper, etc. -> TOM
     voice->type = InstrumentType::TOM;
-    // Frequency mapping: A1(55) to A4(440) based on radius (60 to 20)
-    // Normalized 0-1 (inverse radius)
-    float norm = 1.0f - ((gear.radius - 20.0f) / 40.0f);
+    // Frequency based on radius: smaller = higher pitch
+    float norm = 1.0f - ((gear.radius - 20.0f) / 100.0f);
     norm = std::clamp(norm, 0.0f, 1.0f);
-    // Approx mapping
-    voice->frequency = 55.0f * std::pow(2.0f, norm * 3.0f); // 3 octaves
-    voice->envDecay =
-        (voice->frequency < 150.0f ? 0.4f : 0.25f) + turbulence_ * 0.2f;
+    voice->frequency = 80.0f + norm * 200.0f; // 80-280 Hz range
+    voice->envDecay = 0.25f + turbulence_ * 0.15f;
   }
 }
 
@@ -172,92 +210,118 @@ float GearheartEngine::getNextSample(GearVoice &v) {
 }
 
 float GearheartEngine::synthesizeKick(GearVoice &v) {
-  // Sine sweep 55->30 Hz
-  float sweep = 1.0f - std::min(1.0f, v.envTime / 0.15f);
-  float freq = 30.0f + 25.0f * (sweep * sweep);
+  // Based on original TS playKickDrum
+  // Sub-bass oscillator: 55Hz -> 30Hz sweep
+  float sweep = std::max(0.0f, 1.0f - v.envTime / 0.15f);
+  float freq = 30.0f + 25.0f * sweep;
 
   v.phase += freq / sampleRate_;
   if (v.phase >= 1.0f)
     v.phase -= 1.0f;
   float sine = std::sin(v.phase * TWO_PI);
 
-  // Click (Triangle 150->40)
-  float clickFreq =
-      40.0f + 110.0f * std::pow(std::max(0.0f, 1.0f - v.envTime / 0.03f), 2.0f);
+  // Click transient: 150Hz -> 40Hz
+  float clickSweep = std::max(0.0f, 1.0f - v.envTime / 0.03f);
+  float clickFreq = 40.0f + 110.0f * (clickSweep * clickSweep);
   v.phase2 += clickFreq / sampleRate_;
   if (v.phase2 >= 1.0f)
     v.phase2 -= 1.0f;
   float tri = 4.0f * std::abs(v.phase2 - 0.5f) - 1.0f;
 
-  // Envelopes
+  // Sub envelope: attack 3ms, then decay
   float subEnv = 0.0f;
-  if (v.envTime < 0.003f)
-    subEnv = v.envTime / 0.003f; // Attack
-  else
-    subEnv = std::exp(-(v.envTime - 0.003f) * 10.0f); // Decay
+  if (v.envTime < 0.003f) {
+    subEnv = v.envTime / 0.003f; // Linear attack
+  } else {
+    subEnv = std::exp(-(v.envTime - 0.003f) * (1.0f / v.envDecay) * 3.0f);
+  }
 
+  // Click envelope: attack 2ms, fast decay
   float clickEnv = 0.0f;
-  if (v.envTime < 0.002f)
+  if (v.envTime < 0.002f) {
     clickEnv = v.envTime / 0.002f;
-  else
-    clickEnv = std::exp(-(v.envTime - 0.002f) * 50.0f);
+  } else {
+    clickEnv = std::exp(-(v.envTime - 0.002f) * 40.0f);
+  }
 
-  return (sine * subEnv * 4.0f + tri * clickEnv * 2.5f) * v.gain;
+  // Gains reduced to prevent distortion
+  return (sine * subEnv * 1.5f + tri * clickEnv * 1.0f) * v.gain;
 }
 
 float GearheartEngine::synthesizeTom(GearVoice &v) {
-  // Sine sweep
-  float freq = v.frequency * (1.0f - 0.25f * std::min(1.0f, v.envTime / 0.1f));
+  // Based on original TS playTomDrum
+  // Sine sweep: freq -> freq*0.75 over 0.1s
+  float sweep = std::min(1.0f, v.envTime / 0.1f);
+  float freq = v.frequency * (1.0f - 0.25f * sweep);
 
   v.phase += freq / sampleRate_;
   if (v.phase >= 1.0f)
     v.phase -= 1.0f;
   float sine = std::sin(v.phase * TWO_PI);
 
+  // Envelope with 3ms attack
   float env = 0.0f;
-  if (v.envTime < 0.003f)
+  if (v.envTime < 0.003f) {
     env = v.envTime / 0.003f;
-  else
-    env = std::exp(-(v.envTime - 0.003f) * (5.0f / v.envDecay));
+  } else {
+    env = std::exp(-(v.envTime - 0.003f) * (3.0f / v.envDecay));
+  }
 
-  return sine * env * v.gain;
+  // Volume based on frequency (lower = louder)
+  float freqFactor = std::max(0.0f, 1.0f - (v.frequency / 500.0f));
+  float baseVol = 1.0f + freqFactor * 1.5f; // Increased from 0.3 + 0.5
+
+  return sine * env * baseVol * v.gain;
 }
 
 float GearheartEngine::synthesizeHiHat(GearVoice &v) {
+  // Based on original TS playClosedHiHat
+  // White noise through highpass at 10kHz
   float noise = generateNoise();
-  // Highpass 10000Hz
-  // Actually voice struct has noiseFilterState
   float filtered = highpass(noise, 10000.0f, v.noiseFilterState);
 
+  // Envelope: 3ms attack, fast decay (50ms total)
   float env = 0.0f;
-  if (v.envTime < 0.003f)
+  if (v.envTime < 0.003f) {
     env = v.envTime / 0.003f;
-  else
-    env = std::exp(-(v.envTime - 0.003f) * 100.0f); // Fast decay
+  } else {
+    env = std::exp(-(v.envTime - 0.003f) * 60.0f);
+  }
 
-  return filtered * env * v.gain;
+  return filtered * env * 1.0f * v.gain; // Increased from 0.3
 }
 
 float GearheartEngine::synthesizeSnare(GearVoice &v) {
-  // Noise BP 2500Hz
+  // Based on original TS playBrushSnare
+  // Noise through bandpass at 2500Hz
   float noise = generateNoise();
   float filteredNoise = bandpass(noise, 2500.0f, 1.5f, v.noiseFilterState);
 
-  // Tone
+  // Body/tone oscillator: triangle 250Hz -> 220Hz
   float toneFreq = 220.0f + 30.0f * std::exp(-v.envTime * 20.0f);
   v.phase += toneFreq / sampleRate_;
   if (v.phase >= 1.0f)
     v.phase -= 1.0f;
   float tri = 4.0f * std::abs(v.phase - 0.5f) - 1.0f;
-  // Tone HP 200Hz (simplified)
 
+  // Noise envelope: 20ms attack, longer decay (150ms)
   float noiseEnv = 0.0f;
-  if (v.envTime < 0.003f)
-    noiseEnv = v.envTime / 0.003f;
-  else
-    noiseEnv = std::exp(-(v.envTime - 0.003f) * 15.0f);
+  if (v.envTime < 0.02f) {
+    noiseEnv = v.envTime / 0.02f;
+  } else {
+    noiseEnv = std::exp(-(v.envTime - 0.02f) * 10.0f);
+  }
 
-  return (filteredNoise * noiseEnv * 0.4f + tri * noiseEnv * 0.3f) * v.gain;
+  // Tone envelope: 3ms attack, fast decay (50ms)
+  float toneEnv = 0.0f;
+  if (v.envTime < 0.003f) {
+    toneEnv = v.envTime / 0.003f;
+  } else {
+    toneEnv = std::exp(-(v.envTime - 0.003f) * 30.0f);
+  }
+
+  // Brush snare: noise dominant, soft tone - increased gains
+  return (filteredNoise * noiseEnv * 0.6f + tri * toneEnv * 0.4f) * v.gain;
 }
 
 // Filters implementation

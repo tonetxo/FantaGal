@@ -2,6 +2,7 @@
 #define GEARHEART_ENGINE_H
 
 #include "../BaseSynthEngine.h"
+#include <array>
 #include <cmath>
 #include <map>
 #include <random>
@@ -34,16 +35,23 @@ struct GearVoice {
 };
 
 struct AudioGear {
-  int32_t id;
+  int32_t id = 0;
+  float x = 0.0f; // UI position X
+  float y = 0.0f; // UI position Y
   float speed = 0.0f;
   bool isConnected = false;
   int material = 0; // 0=iron, 1=bronze, 2=copper, 3=gold, 4=platinum
   float radius = 40.0f;
+  int depth = 0; // Distance from motor for volume attenuation
+  int teeth = 8; // Number of teeth for visual
 
   // Runtime
   float angle = 0.0f;
   int lastRotation = 0;
 };
+
+// Number of gears in the system
+static constexpr int GEAR_COUNT = 5;
 
 class GearheartEngine : public BaseSynthEngine {
 public:
@@ -59,9 +67,15 @@ public:
   void stopNote(int32_t noteId) override {}
   void reset() override;
 
-  // Custom method to update gear state from UI
+  // Gear state management (called from UI)
   void updateGear(int32_t id, float speed, bool isConnected, int material,
-                  float radius);
+                  float radius, int depth);
+  void updateGearPosition(int32_t id, float x, float y);
+
+  // Get gear states for UI to render
+  const std::array<AudioGear, GEAR_COUNT> &getGearStates() const {
+    return gearStates_;
+  }
 
 private:
   static constexpr int MAX_VOICES = 16;
@@ -69,6 +83,7 @@ private:
 
   std::vector<GearVoice> voices_;
   std::map<int32_t, AudioGear> gears_;
+  std::array<AudioGear, GEAR_COUNT> gearStates_; // Persistent UI state
 
   // Parameters
   float masterGain_ = 1.0f;

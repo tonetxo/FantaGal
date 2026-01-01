@@ -56,7 +56,7 @@ class SynthViewModel : ViewModel() {
     fun toggleEngine(engine: SynthEngine) {
         val newState = !isEngineActive(engine)
         _engineActiveStates.update { states ->
-            states + (engine to newState)
+            states.toMutableMap().apply { put(engine, newState) }
         }
         audioBridge.setEngineEnabled(engine, newState)
         // Note: Each engine manages its own state internally
@@ -95,7 +95,8 @@ class SynthViewModel : ViewModel() {
     }
 
     /**
-     * Update a single parameter
+     * Update a single parameter (GLOBAL - affects all engines)
+     * @deprecated Use updateEngineParameter for engine-specific updates
      */
     fun updatePressure(value: Float) {
         _synthState.value = _synthState.value.copy(pressure = value)
@@ -122,8 +123,37 @@ class SynthViewModel : ViewModel() {
         pushParametersToEngine()
     }
 
+    // --- PER-ENGINE INDEPENDENT PARAMETER STATE ---
+    private val engineStates = mutableMapOf<SynthEngine, MutableStateFlow<SynthState>>().apply {
+        SynthEngine.entries.forEach { put(it, MutableStateFlow(SynthState())) }
+    }
+    
     /**
-     * Push current state to native engine
+     * Get observable state for a specific engine
+     */
+    fun getEngineState(engine: SynthEngine): StateFlow<SynthState> {
+        return engineStates[engine]?.asStateFlow() ?: _synthState.asStateFlow()
+    }
+    
+    /**
+     * Update a parameter for a SPECIFIC engine only (independent)
+     */
+    fun updateEngineParameter(engine: SynthEngine, param: String, value: Float) {
+        val state = engineStates[engine] ?: return
+        val newState = when (param) {
+            "pressure" -> state.value.copy(pressure = value)
+            "resonance" -> state.value.copy(resonance = value)
+            "viscosity" -> state.value.copy(viscosity = value)
+            "turbulence" -> state.value.copy(turbulence = value)
+            "diffusion" -> state.value.copy(diffusion = value)
+            else -> state.value
+        }
+        state.value = newState
+        audioBridge.updateEngineParameters(engine, newState)
+    }
+
+    /**
+     * Push current state to native engine (DEPRECATED - affects all)
      */
     private fun pushParametersToEngine() {
         audioBridge.updateParameters(_synthState.value)
@@ -171,8 +201,16 @@ class SynthViewModel : ViewModel() {
     /**
      * Update gear state for Gearheart Engine
      */
-    fun updateGear(id: Int, speed: Float, isConnected: Boolean, material: Int, radius: Float) {
-        audioBridge.updateGear(id, speed, isConnected, material, radius)
+    fun updateGear(id: Int, speed: Float, isConnected: Boolean, material: Int, radius: Float, depth: Int) {
+        audioBridge.updateGear(id, speed, isConnected, material, radius, depth)
+    }
+
+    fun updateGearPosition(id: Int, x: Float, y: Float) {
+        audioBridge.updateGearPosition(id, x, y)
+    }
+
+    fun getGearStates(): List<NativeAudioBridge.GearData> {
+        return audioBridge.getGearStates()
     }
 
     override fun onCleared() {

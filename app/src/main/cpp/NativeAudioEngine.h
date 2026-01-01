@@ -52,10 +52,19 @@ public:
   bool isEngineEnabled(int engineType) const;
 
   /**
-   * Update synth parameters (applies to all engines)
+   * Update synth parameters for ALL engines (deprecated - use
+   * updateEngineParameters)
    */
   void updateParameters(float pressure, float resonance, float viscosity,
                         float turbulence, float diffusion);
+
+  /**
+   * Update synth parameters for a SPECIFIC engine only
+   * This ensures engine independence
+   */
+  void updateEngineParameters(int engineType, float pressure, float resonance,
+                              float viscosity, float turbulence,
+                              float diffusion);
 
   /**
    * Play a note on all enabled engines that support it
@@ -76,7 +85,12 @@ public:
    * Update gear state for Gearheart Engine
    */
   void updateGear(int32_t id, float speed, bool isConnected, int material,
-                  float radius);
+                  float radius, int depth);
+  void updateGearPosition(int32_t id, float x, float y);
+
+  // Fill array with gear data: [id, x, y, speed, isConnected, material, radius,
+  // depth] * 5 Returns number of gears written
+  int32_t getGearData(float *destination, int32_t capacity);
 
   /**
    * Set the currently selected engine for UI focus (for note routing)

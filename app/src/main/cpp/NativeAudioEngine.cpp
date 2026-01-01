@@ -135,13 +135,56 @@ void NativeAudioEngine::setSelectedEngine(int engineType) {
 }
 
 void NativeAudioEngine::updateGear(int32_t id, float speed, bool isConnected,
-                                   int material, float radius) {
+                                   int material, float radius, int depth) {
   std::lock_guard<std::mutex> lock(engineMutex_);
   if (engines_[ENGINE_GEARHEART]) {
     auto *gearheart =
         static_cast<GearheartEngine *>(engines_[ENGINE_GEARHEART].get());
-    gearheart->updateGear(id, speed, isConnected, material, radius);
+    gearheart->updateGear(id, speed, isConnected, material, radius, depth);
   }
+}
+
+void NativeAudioEngine::updateGearPosition(int32_t id, float x, float y) {
+  std::lock_guard<std::mutex> lock(engineMutex_);
+  if (engines_[ENGINE_GEARHEART]) {
+    auto *gearheart =
+        static_cast<GearheartEngine *>(engines_[ENGINE_GEARHEART].get());
+    gearheart->updateGearPosition(id, x, y);
+  }
+}
+
+int32_t NativeAudioEngine::getGearData(float *destination, int32_t capacity) {
+  std::lock_guard<std::mutex> lock(engineMutex_);
+  if (!engines_[ENGINE_GEARHEART])
+    return 0;
+
+  auto *gearheart =
+      static_cast<GearheartEngine *>(engines_[ENGINE_GEARHEART].get());
+  const auto &gears = gearheart->getGearStates();
+
+  int count = 0;
+  // Each gear takes 9 floats: id, x, y, speed, isConnected, material, radius,
+  // depth, teeth
+  int stride = 9;
+
+  for (const auto &gear : gears) {
+    if ((count + 1) * stride > capacity)
+      break;
+
+    int idx = count * stride;
+    destination[idx + 0] = (float)gear.id;
+    destination[idx + 1] = gear.x;
+    destination[idx + 2] = gear.y;
+    destination[idx + 3] = gear.speed;
+    destination[idx + 4] = gear.isConnected ? 1.0f : 0.0f;
+    destination[idx + 5] = (float)gear.material;
+    destination[idx + 6] = gear.radius;
+    destination[idx + 7] = (float)gear.depth;
+    destination[idx + 8] = (float)gear.teeth;
+
+    count++;
+  }
+  return count;
 }
 
 void NativeAudioEngine::updateParameters(float pressure, float resonance,
@@ -159,6 +202,27 @@ void NativeAudioEngine::updateParameters(float pressure, float resonance,
     if (engines_[i]) {
       engines_[i]->updateParameters(currentState_);
     }
+  }
+}
+
+void NativeAudioEngine::updateEngineParameters(int engineType, float pressure,
+                                               float resonance, float viscosity,
+                                               float turbulence,
+                                               float diffusion) {
+  if (engineType < 0 || engineType >= ENGINE_COUNT)
+    return;
+
+  // Create engine-local state (does not affect currentState_)
+  SynthState engineState;
+  engineState.pressure = pressure;
+  engineState.resonance = resonance;
+  engineState.viscosity = viscosity;
+  engineState.turbulence = turbulence;
+  engineState.diffusion = diffusion;
+
+  std::lock_guard<std::mutex> lock(engineMutex_);
+  if (engines_[engineType]) {
+    engines_[engineType]->updateParameters(engineState);
   }
 }
 

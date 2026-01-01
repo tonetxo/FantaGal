@@ -28,7 +28,6 @@ class NativeAudioBridge {
     private external fun nativePlayNote(frequency: Float, velocity: Float): Int
     private external fun nativeStopNote(noteId: Int)
     private external fun nativeGetSampleRate(): Int
-    private external fun nativeUpdateGear(id: Int, speed: Float, isConnected: Boolean, material: Int, radius: Float)
 
     /**
      * Initialize and start the audio engine
@@ -61,10 +60,24 @@ class NativeAudioBridge {
     }
 
     /**
-     * Update synth parameters (applies to all engines)
+     * Update synth parameters (applies to all engines - DEPRECATED)
      */
     fun updateParameters(state: SynthState) {
         nativeUpdateParameters(
+            state.pressure,
+            state.resonance,
+            state.viscosity,
+            state.turbulence,
+            state.diffusion
+        )
+    }
+
+    /**
+     * Update synth parameters for a SPECIFIC engine only (INDEPENDENT)
+     */
+    fun updateEngineParameters(engine: SynthEngine, state: SynthState) {
+        nativeUpdateEngineParameters(
+            engine.ordinal,
             state.pressure,
             state.resonance,
             state.viscosity,
@@ -98,9 +111,58 @@ class NativeAudioBridge {
     /**
      * Update gear state for Gearheart engine
      */
-    fun updateGear(id: Int, speed: Float, isConnected: Boolean, material: Int, radius: Float) {
-        nativeUpdateGear(id, speed, isConnected, material, radius)
+    fun updateGear(id: Int, speed: Float, isConnected: Boolean, material: Int, radius: Float, depth: Int) {
+        nativeUpdateGear(id, speed, isConnected, material, radius, depth)
     }
+
+    fun updateGearPosition(id: Int, x: Float, y: Float) {
+        nativeUpdateGearPosition(id, x, y)
+    }
+
+    /**
+     * Get gear states from native engine (for persistence)
+     */
+    fun getGearStates(): List<GearData> {
+        val size = 5 // max gears
+        val stride = 9 // id, x, y, speed, isConnected, material, radius, depth, teeth
+        val buffer = FloatArray(size * stride)
+        val count = nativeGetGearData(buffer)
+
+        val gears = mutableListOf<GearData>()
+        for (i in 0 until count) {
+            val idx = i * stride
+            gears.add(GearData(
+                id = buffer[idx].toInt(),
+                x = buffer[idx + 1],
+                y = buffer[idx + 2],
+                speed = buffer[idx + 3],
+                isConnected = buffer[idx + 4] > 0.5f,
+                material = buffer[idx + 5].toInt(),
+                radius = buffer[idx + 6],
+                depth = buffer[idx + 7].toInt(),
+                teeth = buffer[idx + 8].toInt()
+            ))
+        }
+        return gears
+    }
+
+    // New generic data class for bridge transfer
+    data class GearData(
+        val id: Int,
+        val x: Float,
+        val y: Float,
+        val speed: Float,
+        val isConnected: Boolean,
+        val material: Int,
+        val radius: Float,
+        val depth: Int,
+        val teeth: Int
+    )
+
+    private external fun nativeUpdateGear(id: Int, speed: Float, isConnected: Boolean, material: Int, radius: Float, depth: Int)
+    private external fun nativeUpdateGearPosition(id: Int, x: Float, y: Float)
+    private external fun nativeGetGearData(destination: FloatArray): Int
+    private external fun nativeUpdateEngineParameters(engineType: Int, pressure: Float, resonance: Float, viscosity: Float, turbulence: Float, diffusion: Float)
 }
 
 /**

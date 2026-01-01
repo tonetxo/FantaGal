@@ -13,11 +13,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -63,13 +66,16 @@ fun CriosferaScreen(
     // XY values mapped to selected parameters
     var xValue by remember { mutableStateOf(synthState.resonance) }
     var yValue by remember { mutableStateOf(synthState.pressure) }
+    
+    // Menu visibility state
+    var showMenu by remember { mutableStateOf(false) }
 
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(StoneBackground)
     ) {
-        // Background visualizer
+        // Visualizer background
         AudioVisualizer(
             turbulence = synthState.turbulence,
             viscosity = synthState.viscosity,
@@ -107,7 +113,7 @@ fun CriosferaScreen(
                             tint = CriosferaPrimary.copy(alpha = 0.6f)
                         )
                     }
-                    IconButton(onClick = { /* Menu */ }) {
+                    IconButton(onClick = { showMenu = !showMenu }) {
                         Icon(
                             imageVector = Icons.Default.Menu,
                             contentDescription = "Menu",
@@ -115,6 +121,37 @@ fun CriosferaScreen(
                         )
                     }
                 }
+            }
+            
+            // Parameter Menu (Independent sliders)
+            if (showMenu && isEngineActive) {
+                val crioState by viewModel.getEngineState(SynthEngine.CRIOSFERA).collectAsState()
+                Column(
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp)
+                        .fillMaxWidth(0.9f)
+                        .background(Color.Black.copy(alpha = 0.85f), RoundedCornerShape(12.dp))
+                        .padding(16.dp)
+                ) {
+                    Text("PARÁMETROS CRIOSFERA", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp))
+                    
+                    CrioParamSlider("PRESIÓN", crioState.pressure) { 
+                        viewModel.updateEngineParameter(SynthEngine.CRIOSFERA, "pressure", it)
+                    }
+                    CrioParamSlider("RESONANCIA", crioState.resonance) { 
+                        viewModel.updateEngineParameter(SynthEngine.CRIOSFERA, "resonance", it)
+                    }
+                    CrioParamSlider("VISCOSIDADE", crioState.viscosity) { 
+                        viewModel.updateEngineParameter(SynthEngine.CRIOSFERA, "viscosity", it)
+                    }
+                    CrioParamSlider("TORMENTA", crioState.turbulence) { 
+                        viewModel.updateEngineParameter(SynthEngine.CRIOSFERA, "turbulence", it)
+                    }
+                    CrioParamSlider("DIFUSIÓN", crioState.diffusion) { 
+                        viewModel.updateEngineParameter(SynthEngine.CRIOSFERA, "diffusion", it)
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -182,5 +219,28 @@ fun CriosferaScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
         }
+    }
+}
+
+@Composable
+fun CrioParamSlider(label: String, value: Float, onValueChange: (Float) -> Unit) {
+    Column(modifier = Modifier.padding(vertical = 4.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(label, color = Color.White, fontSize = 10.sp)
+            Text(String.format("%.2f", value), color = Color.Gray, fontSize = 10.sp)
+        }
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            colors = SliderDefaults.colors(
+                thumbColor = CriosferaPrimary,
+                activeTrackColor = CriosferaPrimary,
+                inactiveTrackColor = Color.DarkGray
+            ),
+            modifier = Modifier.height(20.dp)
+        )
     }
 }

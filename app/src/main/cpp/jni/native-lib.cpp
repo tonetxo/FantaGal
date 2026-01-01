@@ -99,9 +99,38 @@ Java_com_tonetxo_fantagal_audio_NativeAudioBridge_nativeGetSampleRate(
 JNIEXPORT void JNICALL
 Java_com_tonetxo_fantagal_audio_NativeAudioBridge_nativeUpdateGear(
     JNIEnv *env, jobject thiz, jint id, jfloat speed, jboolean isConnected,
-    jint material, jfloat radius) {
+    jint material, jfloat radius, jint depth) {
   NativeAudioEngine::getInstance().updateGear(id, speed, isConnected, material,
-                                              radius);
+                                              radius, depth);
+}
+
+JNIEXPORT void JNICALL
+Java_com_tonetxo_fantagal_audio_NativeAudioBridge_nativeUpdateGearPosition(
+    JNIEnv *env, jobject thiz, jint id, jfloat x, jfloat y) {
+  NativeAudioEngine::getInstance().updateGearPosition(id, x, y);
+}
+
+JNIEXPORT jint JNICALL
+Java_com_tonetxo_fantagal_audio_NativeAudioBridge_nativeGetGearData(
+    JNIEnv *env, jobject thiz, jfloatArray destination) {
+  jfloat *destPtr = env->GetFloatArrayElements(destination, nullptr);
+  jsize capacity = env->GetArrayLength(destination);
+
+  int count = NativeAudioEngine::getInstance().getGearData(destPtr, capacity);
+
+  env->ReleaseFloatArrayElements(destination, destPtr, 0);
+  return count;
+}
+
+/**
+ * Update parameters for a SPECIFIC engine only (independent)
+ */
+JNIEXPORT void JNICALL
+Java_com_tonetxo_fantagal_audio_NativeAudioBridge_nativeUpdateEngineParameters(
+    JNIEnv *env, jobject thiz, jint engineType, jfloat pressure,
+    jfloat resonance, jfloat viscosity, jfloat turbulence, jfloat diffusion) {
+  NativeAudioEngine::getInstance().updateEngineParameters(
+      engineType, pressure, resonance, viscosity, turbulence, diffusion);
 }
 
 } // extern "C"
