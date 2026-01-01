@@ -95,9 +95,8 @@ float CriosferaEngine::processVoice(Voice &voice) {
   if (voice.triPhase >= 1.0f)
     voice.triPhase -= 1.0f;
 
-  // Mix: NOISE DOMINANT like original (noise=0.8, osc1=0.12, osc2=0.09)
-  // Total ~1.0, normalized for C++
-  float mix = filteredNoise * 0.8f + saw * 0.12f + tri * 0.08f;
+  // Mix: noise 60% + oscillators 40% (more tonal, better modulation response)
+  float mix = filteredNoise * 0.6f + saw * 0.2f + tri * 0.2f;
 
   // Apply per-voice filter with faster sweep (1.5s like original)
   // Speed: 0.0001f = very slow, 0.001f = faster

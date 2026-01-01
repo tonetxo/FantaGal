@@ -2,6 +2,7 @@ package com.tonetxo.fantagal.ui.components
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
@@ -78,12 +79,15 @@ fun XYPad(
             )
         }
 
-        // XY Pad Canvas - fills available space
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // XY Pad Canvas - fills available space with better styling
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .clip(RoundedCornerShape(12.dp))
-                .background(StoneSurface.copy(alpha = 0.3f))
+                .clip(RoundedCornerShape(16.dp))
+                .background(StoneSurface.copy(alpha = 0.6f))
+                .border(2.dp, CriosferaPrimary.copy(alpha = 0.4f), RoundedCornerShape(16.dp))
                 .pointerInput(Unit) {
                     detectTapGestures { offset ->
                         val x = (offset.x / size.width).coerceIn(0f, 1f)
