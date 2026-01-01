@@ -124,7 +124,7 @@ class NativeAudioBridge {
      */
     fun getGearStates(): List<GearData> {
         val size = 5 // max gears
-        val stride = 9 // id, x, y, speed, isConnected, material, radius, depth, teeth
+        val stride = 10 // id, x, y, speed, isConnected, material, radius, depth, teeth, angle
         val buffer = FloatArray(size * stride)
         val count = nativeGetGearData(buffer)
 
@@ -140,7 +140,8 @@ class NativeAudioBridge {
                 material = buffer[idx + 5].toInt(),
                 radius = buffer[idx + 6],
                 depth = buffer[idx + 7].toInt(),
-                teeth = buffer[idx + 8].toInt()
+                teeth = buffer[idx + 8].toInt(),
+                angle = buffer[idx + 9]
             ))
         }
         return gears
@@ -156,7 +157,8 @@ class NativeAudioBridge {
         val material: Int,
         val radius: Float,
         val depth: Int,
-        val teeth: Int
+        val teeth: Int,
+        val angle: Float
     )
 
     private external fun nativeUpdateGear(id: Int, speed: Float, isConnected: Boolean, material: Int, radius: Float, depth: Int)

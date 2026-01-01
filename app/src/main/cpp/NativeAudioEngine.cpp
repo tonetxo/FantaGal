@@ -163,9 +163,9 @@ int32_t NativeAudioEngine::getGearData(float *destination, int32_t capacity) {
   const auto &gears = gearheart->getGearStates();
 
   int count = 0;
-  // Each gear takes 9 floats: id, x, y, speed, isConnected, material, radius,
-  // depth, teeth
-  int stride = 9;
+  // Each gear takes 10 floats: id, x, y, speed, isConnected, material, radius,
+  // depth, teeth, angle
+  int stride = 10;
 
   for (const auto &gear : gears) {
     if ((count + 1) * stride > capacity)
@@ -181,6 +181,7 @@ int32_t NativeAudioEngine::getGearData(float *destination, int32_t capacity) {
     destination[idx + 6] = gear.radius;
     destination[idx + 7] = (float)gear.depth;
     destination[idx + 8] = (float)gear.teeth;
+    destination[idx + 9] = gear.angle;
 
     count++;
   }

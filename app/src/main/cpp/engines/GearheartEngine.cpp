@@ -11,16 +11,19 @@ GearheartEngine::GearheartEngine()
   // Initialize default gear states (matching original TS implementation)
   // Gear(id, x, y, radius, teeth, angle, speed, isConnected, material)
   // Adjusted for mobile screen (approx 1080px width)
-  gearStates_[0] = {0,      540.0f, 900.0f, 100.0f, true, 0,
-                    120.0f, 0,      12,     0.0f,   0}; // Motor (Iron)
-  gearStates_[1] = {1,     540.0f, 650.0f, 0.0f, false, 1,
-                    60.0f, 999,    8,      0.0f, 0}; // Bronze
-  gearStates_[2] = {2,     340.0f, 950.0f, 0.0f, false, 2,
-                    50.0f, 999,    6,      0.0f, 0}; // Copper
-  gearStates_[3] = {3,     740.0f, 950.0f, 0.0f, false, 3,
-                    80.0f, 999,    10,     0.0f, 0}; // Gold
-  gearStates_[4] = {4,     540.0f, 400.0f, 0.0f, false, 4,
-                    40.0f, 999,    5,      0.0f, 0}; // Platinum
+  gearStates_[0] = {0,      540.0f, 1000.0f, 0.02f, true, 0,
+                    100.0f, 0,      14,      0.0f,  -1}; // Motor
+  gearStates_[1] = {1, 540.0f, 750.0f, 0.0f, false, 1, 60.0f, 999, 8, 0.0f, -1};
+  gearStates_[2] = {2,     340.0f, 1050.0f, 0.0f, false, 2,
+                    50.0f, 999,    6,       0.0f, -1};
+  gearStates_[3] = {3,     740.0f, 1050.0f, 0.0f, false, 3,
+                    80.0f, 999,    10,      0.0f, -1};
+  gearStates_[4] = {4, 540.0f, 500.0f, 0.0f, false, 4, 40.0f, 999, 5, 0.0f, -1};
+
+  // Synchronize initial gears to the runtime map
+  for (int i = 0; i < GEAR_COUNT; ++i) {
+    gears_[i] = gearStates_[i];
+  }
 }
 
 void GearheartEngine::prepare(int32_t sampleRate, int32_t framesPerBuffer) {
@@ -39,8 +42,8 @@ void GearheartEngine::updateParameters(const SynthState &state) {
   // Viscosity -> speed (handled in UI mostly, but affects decay here?)
   // Turbulence -> variability in decay
   turbulence_ = state.turbulence;
-  masterGain_ =
-      0.3f + state.pressure * 0.2f; // Reduced gain to prevent distortion
+  // Balanced master gain - kick needs headroom
+  masterGain_ = 0.5f + state.pressure * 0.3f;
 }
 
 void GearheartEngine::updateGear(int32_t id, float speed, bool isConnected,
@@ -61,7 +64,7 @@ void GearheartEngine::updateGear(int32_t id, float speed, bool isConnected,
   gearStates_[id].speed = speed;
   gearStates_[id].isConnected = isConnected;
   gearStates_[id].depth = depth;
-  gearStates_[id].angle += speed; // Update animation angle
+  // NOTE: angle is driven by the audio process loop for sample accuracy
 }
 
 void GearheartEngine::updateGearPosition(int32_t id, float x, float y) {
@@ -69,6 +72,12 @@ void GearheartEngine::updateGearPosition(int32_t id, float x, float y) {
     return;
   gearStates_[id].x = x;
   gearStates_[id].y = y;
+
+  // Also update the map used by the audio thread
+  if (gears_.count(id)) {
+    gears_[id].x = x;
+    gears_[id].y = y;
+  }
 }
 
 void GearheartEngine::process(float *output, int32_t numFrames) {
@@ -88,16 +97,15 @@ void GearheartEngine::process(float *output, int32_t numFrames) {
 
         gear.angle += speedPerSample;
 
-        // Check full rotation
-        int currentRotation = static_cast<int>(gear.angle / TWO_PI);
+        // Check full rotation (Trigger exactly at 12 o'clock / 0 radians)
+        int currentRotation = static_cast<int>(std::floor(gear.angle / TWO_PI));
         if (currentRotation != gear.lastRotation) {
-          if (gear.lastRotation != 0) { // Skip initialization trigger
-            // __android_log_print(ANDROID_LOG_INFO, "Gearheart", "Trigger gear
-            // %d", gear.id);
-            triggerSound(gear);
-          }
+          triggerSound(gear);
           gear.lastRotation = currentRotation;
         }
+
+        // Sync angle back to UI state array so Kotlin can read it
+        gearStates_[gear.id].angle = gear.angle;
       }
     }
 
@@ -244,7 +252,7 @@ float GearheartEngine::synthesizeKick(GearVoice &v) {
     clickEnv = std::exp(-(v.envTime - 0.002f) * 40.0f);
   }
 
-  // Gains reduced to prevent distortion
+  // Moderate gains with tanh saturation to prevent distortion
   return (sine * subEnv * 1.5f + tri * clickEnv * 1.0f) * v.gain;
 }
 
@@ -361,11 +369,8 @@ float GearheartEngine::bandpass(float input, float freq, float q,
 float GearheartEngine::generateNoise() { return noiseDist_(rng_); }
 
 float GearheartEngine::softClip(float x) {
-  if (x > 1.0f)
-    return 1.0f - std::exp(-x + 1.0f);
-  if (x < -1.0f)
-    return -1.0f + std::exp(x + 1.0f);
-  return x;
+  // Use tanh for smoother saturation
+  return std::tanh(x);
 }
 
 int32_t GearheartEngine::playNote(float frequency, float velocity) {

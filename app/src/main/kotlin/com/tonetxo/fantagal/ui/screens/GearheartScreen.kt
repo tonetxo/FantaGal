@@ -141,9 +141,9 @@ fun GearheartScreen(viewModel: SynthViewModel) {
                     }
                 }
                 
-                // 3. Update Audio Engine & Animation
+                // 3. Update Audio Engine & Sync Visual State
                 gears.forEach { gear ->
-                    // Sync with audio engine
+                    // Sync inputs to audio engine
                     viewModel.updateGear(
                         gear.id, 
                         gear.speed, 
@@ -160,9 +160,14 @@ fun GearheartScreen(viewModel: SynthViewModel) {
                         // Periodically sync back position to native just in case
                         viewModel.updateGearPosition(gear.id, gear.x, gear.y)
                     }
-                    
-                    // Animate UI
-                    gear.angle += gear.speed
+                }
+                
+                // 4. Sync transient state (Angle) back from Native to UI
+                val updatedNativeGears = viewModel.getGearStates()
+                updatedNativeGears.forEach { nativeG ->
+                    gears.find { it.id == nativeG.id }?.let { uiG ->
+                        uiG.angle = nativeG.angle
+                    }
                 }
             }
             
@@ -241,13 +246,13 @@ fun GearheartScreen(viewModel: SynthViewModel) {
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .wrapContentHeight()
-                .padding(top = 80.dp) // Clear global selector
+                .padding(top = 100.dp) // Clear global selector - aligned with Criosfera
         ) {
             // Header Row: Title + Status + Settings + Menu
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
