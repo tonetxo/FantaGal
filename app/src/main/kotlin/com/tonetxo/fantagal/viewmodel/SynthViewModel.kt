@@ -153,6 +153,13 @@ class SynthViewModel : ViewModel() {
         _isPlaying.value = false
     }
 
+    /**
+     * Update gear state for Gearheart Engine
+     */
+    fun updateGear(id: Int, speed: Float, isConnected: Boolean, material: Int, radius: Float) {
+        audioBridge.updateGear(id, speed, isConnected, material, radius)
+    }
+
     override fun onCleared() {
         super.onCleared()
         audioBridge.stop()

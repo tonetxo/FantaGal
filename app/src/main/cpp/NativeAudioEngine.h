@@ -56,6 +56,12 @@ public:
    */
   int32_t getSampleRate() const { return sampleRate_; }
 
+  /**
+   * Update gear state for Gearheart Engine
+   */
+  void updateGear(int32_t id, float speed, bool isConnected, int material,
+                  float radius);
+
   // Oboe callback
   oboe::DataCallbackResult onAudioReady(oboe::AudioStream *audioStream,
                                         void *audioData,
@@ -77,6 +83,7 @@ private:
   std::shared_ptr<oboe::AudioStream> stream_;
   std::unique_ptr<BaseSynthEngine> currentEngine_;
   std::mutex engineMutex_;
+  int currentEngineType_ = 0; // 0=Criosfera, 1=Gearheart
 
   int32_t sampleRate_ = 48000;
   int32_t framesPerBuffer_ = 256;

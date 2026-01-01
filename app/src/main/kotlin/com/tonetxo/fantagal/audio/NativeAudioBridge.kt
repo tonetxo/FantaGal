@@ -27,6 +27,7 @@ class NativeAudioBridge {
     private external fun nativePlayNote(frequency: Float, velocity: Float): Int
     private external fun nativeStopNote(noteId: Int)
     private external fun nativeGetSampleRate(): Int
+    private external fun nativeUpdateGear(id: Int, speed: Float, isConnected: Boolean, material: Int, radius: Float)
 
     /**
      * Initialize and start the audio engine
@@ -82,6 +83,13 @@ class NativeAudioBridge {
      */
     fun getSampleRate(): Int {
         return nativeGetSampleRate()
+    }
+
+    /**
+     * Update gear state for Gearheart engine
+     */
+    fun updateGear(id: Int, speed: Float, isConnected: Boolean, material: Int, radius: Float) {
+        nativeUpdateGear(id, speed, isConnected, material, radius)
     }
 }
 

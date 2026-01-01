@@ -33,7 +33,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tonetxo.fantagal.ui.components.AudioVisualizer
-import com.tonetxo.fantagal.ui.components.EngineSelector
 import com.tonetxo.fantagal.ui.components.ParameterDropdown
 import com.tonetxo.fantagal.ui.components.PianoKeyboard
 import com.tonetxo.fantagal.ui.components.XYPad
@@ -42,7 +41,7 @@ import com.tonetxo.fantagal.ui.theme.StoneBackground
 import com.tonetxo.fantagal.viewmodel.SynthViewModel
 
 /**
- * Complete Criosfera screen matching original design
+ * Criosfera specific UI content
  */
 @Composable
 fun CriosferaScreen(
@@ -50,8 +49,6 @@ fun CriosferaScreen(
     modifier: Modifier = Modifier
 ) {
     val synthState by viewModel.synthState.collectAsState()
-    val currentEngine by viewModel.currentEngine.collectAsState()
-    val isPlaying by viewModel.isPlaying.collectAsState()
     val isEngineActive by viewModel.isEngineActive.collectAsState()
     val activeNotes by viewModel.activeNotes.collectAsState()
 
@@ -81,7 +78,7 @@ fun CriosferaScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 60.dp) // Space for engine selector
+                .padding(top = 100.dp) // Increased to clear EngineSelector
         ) {
             // Header row with tappable title to toggle engine
             Row(
@@ -205,11 +202,5 @@ fun CriosferaScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
         }
-
-        // Engine selector at top
-        EngineSelector(
-            currentEngine = currentEngine,
-            onEngineChange = { viewModel.switchEngine(it) }
-        )
     }
 }

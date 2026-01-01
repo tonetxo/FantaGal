@@ -19,6 +19,7 @@ FetchContent_MakeAvailable(oboe)
 set(AUDIO_SOURCES
     NativeAudioEngine.cpp
     engines/CriosferaEngine.cpp
+    engines/GearheartEngine.cpp
     jni/native-lib.cpp
 )
 

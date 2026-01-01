@@ -81,4 +81,15 @@ Java_com_tonetxo_fantagal_audio_NativeAudioBridge_nativeGetSampleRate(
   return NativeAudioEngine::getInstance().getSampleRate();
 }
 
+/**
+ * Update gear for Gearheart engine
+ */
+JNIEXPORT void JNICALL
+Java_com_tonetxo_fantagal_audio_NativeAudioBridge_nativeUpdateGear(
+    JNIEnv *env, jobject thiz, jint id, jfloat speed, jboolean isConnected,
+    jint material, jfloat radius) {
+  NativeAudioEngine::getInstance().updateGear(id, speed, isConnected, material,
+                                              radius);
+}
+
 } // extern "C"

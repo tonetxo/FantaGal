@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -42,6 +43,7 @@ fun EngineSelector(
     Box(
         modifier = modifier
             .fillMaxWidth()
+            .statusBarsPadding()
             .padding(top = 12.dp),
         contentAlignment = Alignment.TopCenter
     ) {

@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
-import com.tonetxo.fantagal.ui.screens.CriosferaScreen
+import com.tonetxo.fantagal.ui.screens.MainScreen
 import com.tonetxo.fantagal.ui.theme.FantaGalTheme
 import com.tonetxo.fantagal.viewmodel.SynthViewModel
 
@@ -30,7 +30,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    CriosferaScreen(viewModel = viewModel)
+                    MainScreen(viewModel = viewModel)
                 }
             }
         }

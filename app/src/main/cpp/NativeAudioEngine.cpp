@@ -85,23 +85,39 @@ void NativeAudioEngine::restartStream() {
   start();
 }
 
+#include "engines/GearheartEngine.h"
+
+// ... (includes remain the same)
+
 void NativeAudioEngine::switchEngine(int engineType) {
   std::lock_guard<std::mutex> lock(engineMutex_);
 
-  // For now, only Criosfera is implemented
+  currentEngineType_ = engineType;
+
   switch (engineType) {
+  case 1:
+    currentEngine_ = std::make_unique<GearheartEngine>();
+    LOGI("Switched to GearheartEngine");
+    break;
   case 0:
   default:
     currentEngine_ = std::make_unique<CriosferaEngine>();
+    LOGI("Switched to CriosferaEngine");
     break;
-    // Future engines:
-    // case 1: currentEngine_ = std::make_unique<GearheartEngine>(); break;
-    // case 2: currentEngine_ = std::make_unique<EchoVesselEngine>(); break;
   }
 
   if (currentEngine_) {
     currentEngine_->prepare(sampleRate_, framesPerBuffer_);
     currentEngine_->updateParameters(currentState_);
+  }
+}
+
+void NativeAudioEngine::updateGear(int32_t id, float speed, bool isConnected,
+                                   int material, float radius) {
+  if (currentEngineType_ == 1 && currentEngine_) {
+    std::lock_guard<std::mutex> lock(engineMutex_);
+    auto *gearheart = static_cast<GearheartEngine *>(currentEngine_.get());
+    gearheart->updateGear(id, speed, isConnected, material, radius);
   }
 }
 
