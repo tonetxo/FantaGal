@@ -180,6 +180,7 @@ void BreitemaEngine::toggleStep(int32_t step) {
 void BreitemaEngine::setRhythmMode(int32_t mode) {
   std::lock_guard<std::mutex> lock(stateMutex_);
   rhythmMode_ = mode;
+  // Called within lock, generateRandomPattern no longer locks internally
   generateRandomPattern();
 }
 
@@ -188,7 +189,8 @@ void BreitemaEngine::generateRandomPattern() {
   const float MUINEIRA[16] = {1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1};
   const float RIBEIRADA[16] = {1, 0, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 0, 0, 1, 1};
 
-  std::lock_guard<std::mutex> lock(stateMutex_);
+  // NOTE: This method is called from within locked contexts (setRhythmMode)
+  // or during initialization.
   for (int i = 0; i < NUM_STEPS; ++i) {
     if (rhythmMode_ == 1) { // muineira
       stepProbabilities_[i] = MUINEIRA[i];
