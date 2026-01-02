@@ -35,6 +35,7 @@ import com.tonetxo.fantagal.ui.theme.BreitemaBlue
 import com.tonetxo.fantagal.ui.theme.StoneBackground
 import com.tonetxo.fantagal.viewmodel.SynthViewModel
 import kotlinx.coroutines.delay
+import kotlin.math.*
 
 @Composable
 fun BreitemaScreen(
@@ -313,7 +314,7 @@ fun BreitemaFogVisuals(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween((10000 / (movement + 0.1f)).toInt(), easing = LinearEasing),
+            animation = tween((6000 / (movement + 0.15f)).toInt(), easing = LinearEasing),
             repeatMode = RepeatMode.Reverse
         )
     )
@@ -322,8 +323,17 @@ fun BreitemaFogVisuals(
         initialValue = 0f,
         targetValue = 360f,
         animationSpec = infiniteRepeatable(
-            animation = tween((20000 / (movement + 0.1f)).toInt(), easing = LinearEasing),
+            animation = tween((12000 / (movement + 0.15f)).toInt(), easing = LinearEasing),
             repeatMode = RepeatMode.Restart
+        )
+    )
+
+    val fogJitter by infiniteTransition.animateFloat(
+        initialValue = 0.8f,
+        targetValue = 1.2f,
+        animationSpec = infiniteRepeatable(
+            animation = tween((2000 / (movement + 1f)).toInt(), easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
         )
     )
 
@@ -334,29 +344,52 @@ fun BreitemaFogVisuals(
         val baseColor = if (fmDepth > 250f) Color(0xFFA855F7) else BreitemaBlue
         val opacity = density * (0.3f + if (isPlaying && (currentStep % 4 == 0)) 0.2f else 0f)
 
-        // Fog Layer 1
-        rotate(fogRotate, center) {
+        // Turbulence impact on displacement
+        val movementRange = 100f + movement * 300f
+
+        // Fog Layer 1 (Slowest)
+        rotate(fogRotate * 0.5f, center) {
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(baseColor.copy(alpha = opacity), Color.Transparent),
-                    center = center.copy(x = center.x + (fogMove * 100f)),
-                    radius = radius
+                    colors = listOf(baseColor.copy(alpha = opacity * 0.8f), Color.Transparent),
+                    center = center.copy(x = center.x + (fogMove * movementRange * 0.5f)),
+                    radius = radius * fogJitter
                 ),
                 radius = radius,
                 center = center
             )
         }
 
-        // Fog Layer 2
-        drawCircle(
-            brush = Brush.radialGradient(
-                colors = listOf(baseColor.copy(alpha = opacity * 0.5f), Color.Transparent),
-                center = center.copy(y = center.y - (fogMove * 150f)),
-                radius = radius * 1.5f
-            ),
-            radius = radius * 1.5f,
-            center = center
-        )
+        // Fog Layer 2 (Medium)
+        rotate(-fogRotate, center) {
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(baseColor.copy(alpha = opacity * 0.5f), Color.Transparent),
+                    center = center.copy(y = center.y - (fogMove * movementRange)),
+                    radius = radius * 1.5f
+                ),
+                radius = radius * 1.5f,
+                center = center
+            )
+        }
+
+        // Fog Layer 3 (Fast & Chaotic - only prominent at high movement)
+        if (movement > 0.3f) {
+            rotate(fogRotate * 2f, center) {
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(baseColor.copy(alpha = opacity * movement * 0.6f), Color.Transparent),
+                        center = center.copy(
+                            x = center.x + (cos(fogRotate * 0.1f).toFloat() * movementRange * 0.8f),
+                            y = center.y + (sin(fogRotate * 0.1f).toFloat() * movementRange * 0.8f)
+                        ),
+                        radius = radius * 0.7f
+                    ),
+                    radius = radius * 0.7f,
+                    center = center
+                )
+            }
+        }
     }
 }
 

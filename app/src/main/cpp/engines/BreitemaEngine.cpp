@@ -43,8 +43,8 @@ void BreitemaEngine::process(float *output, int32_t numFrames) {
       currentSampleCount_ += 1.0;
     }
 
-    // LFO for fog movement (0.05 - 0.55 Hz)
-    float lfoSpeed = 0.05f + fogMovement_ * 0.5f;
+    // LFO for fog movement (0.1 - 2.0 Hz) - Increased range
+    float lfoSpeed = 0.1f + fogMovement_ * 1.9f;
     fogLfoPhase_ += lfoSpeed * dt;
     if (fogLfoPhase_ >= 1.0f)
       fogLfoPhase_ -= 1.0f;
@@ -113,8 +113,8 @@ float BreitemaEngine::synthesizeVoice(FMVoice &v) {
 void BreitemaEngine::scheduleStep(int32_t step, double timeInSamples) {
   float baseProb = stepProbabilities_[step];
 
-  // Fog modulation
-  float lfoMod = std::sin(fogLfoPhase_ * TWO_PI) * 0.15f;
+  // Fog modulation - increased impact
+  float lfoMod = std::sin(fogLfoPhase_ * TWO_PI) * (0.1f + fogMovement_ * 0.3f);
   float prob =
       baseProb + (1.0f - baseProb) * (fogDensity_ - 0.2f) / 0.8f + lfoMod;
   prob = std::max(0.05f, std::min(1.0f, prob));
