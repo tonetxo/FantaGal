@@ -99,6 +99,7 @@ private:
   float triangleOsc(float phase);
   float getLfoValue(); // Sawtooth LFO like original
   float processVoice(Voice &voice);
+  float resonantFilter(float input, float freq, float q, float *state);
   float bandpassFilter(float input, float freq, float q, float *state);
   float lowpassFilter(float input, float freq, float *state);
   void processEnvelope(Voice &voice);

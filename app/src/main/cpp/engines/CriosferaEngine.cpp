@@ -56,6 +56,28 @@ float CriosferaEngine::lowpassFilter(float input, float freq, float *state) {
   return state[0];
 }
 
+// Resonant State Variable Filter (Chamberlin)
+float CriosferaEngine::resonantFilter(float input, float freq, float q,
+                                      float *state) {
+  if (sampleRate_ <= 0)
+    return input;
+
+  // Ensure stable range
+  float f = 2.0f * std::sin(3.14159f * freq / static_cast<float>(sampleRate_));
+  f = std::clamp(f, 0.0f, 1.4f); // Stability limit
+  float damping = 1.0f / std::max(0.1f, q);
+
+  // SVF Algorithm: state[0]=low, state[1]=band
+  float low = state[0] + f * state[1];
+  float high = input - low - damping * state[1];
+  float band = f * high + state[1];
+
+  state[0] = low;
+  state[1] = band;
+
+  return low;
+}
+
 // Simple bandpass using two one-pole filters
 float CriosferaEngine::bandpassFilter(float input, float freq, float q,
                                       float *state) {
@@ -155,8 +177,8 @@ void CriosferaEngine::process(float *output, int32_t numFrames) {
     static float smoothedCutoff = 1000.0f;
     smoothedCutoff += (targetCutoff - smoothedCutoff) * 0.01f;
 
-    float filtered =
-        lowpassFilter(voiceMix, smoothedCutoff, globalFilterState_[0]);
+    float filtered = resonantFilter(voiceMix, smoothedCutoff, filterQ_,
+                                    globalFilterState_[0]);
 
     // Simple delay
     int delaySamples = static_cast<int>(delayTime_ * sampleRate_);
@@ -213,10 +235,9 @@ void CriosferaEngine::updateParameters(const SynthState &state) {
   filterCutoff_ = 12000.0f - state.viscosity * 11500.0f;
   filterCutoff_ = std::clamp(filterCutoff_, 150.0f, 12000.0f);
 
-  // Resonance = filter Q + delay feedback (MORE AGGRESSIVE)
-  filterQ_ = 1.0f + state.resonance * 20.0f; // Max Q=21 (very resonant)
-  delayFeedback_ =
-      0.15f + state.resonance * 0.8f; // Max 0.95 (near self-oscillation)
+  // Resonance = filter Q + delay feedback (Reduced intensity)
+  filterQ_ = 1.0f + state.resonance * 10.0f;       // Max Q=11 (was 21)
+  delayFeedback_ = 0.15f + state.resonance * 0.7f; // Max 0.85 (was 0.95)
 
   // Turbulence = LFO speed and depth (MORE AGGRESSIVE)
   lfoSpeed_ = 0.1f + state.turbulence * 12.0f; // Max 12.1 Hz (was 8)
