@@ -96,10 +96,17 @@ public:
   EnvelopeFollower(float sampleRate) { setSampleRate(sampleRate); }
 
   void setSampleRate(float sampleRate) {
-    float attackMs = 2.0f;
-    float releaseMs = 30.0f;
-    mAttack = std::exp(-1.0f / (sampleRate * attackMs * 0.001f));
-    mRelease = std::exp(-1.0f / (sampleRate * releaseMs * 0.001f));
+    mSampleRate = sampleRate;
+    setAttack(2.0f);
+    setRelease(30.0f);
+  }
+
+  void setAttack(float attackMs) {
+    mAttack = std::exp(-1.0f / (mSampleRate * attackMs * 0.001f));
+  }
+
+  void setRelease(float releaseMs) {
+    mRelease = std::exp(-1.0f / (mSampleRate * releaseMs * 0.001f));
   }
 
   float process(float input) {
@@ -113,6 +120,7 @@ public:
   }
 
 private:
+  float mSampleRate = 48000.0f;
   float mAttack = 0.0f;
   float mRelease = 0.0f;
   float mEnvelope = 0.0f;
@@ -144,3 +152,14 @@ private:
   float mTargetValue;
   float mAlpha = 0.99f;
 };
+
+/**
+ * Aproximación rápida a tanh para soft clipping.
+ */
+inline float fastTanh(float x) {
+  if (x < -3.0f)
+    return -1.0f;
+  if (x > 3.0f)
+    return 1.0f;
+  return x * (27.0f + x * x) / (27.0f + 9.0f * x * x);
+}

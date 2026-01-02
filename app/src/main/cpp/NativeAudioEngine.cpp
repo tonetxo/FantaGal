@@ -357,6 +357,8 @@ NativeAudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
 
     // Tapping logic for Vocoder: mix everything except vocoder first
     std::vector<float> carrierBuffer(numFrames, 0.0f);
+    bool vocoderEnabled =
+        engines_[ENGINE_VOCODER] && engineEnabled_[ENGINE_VOCODER];
 
     for (int i = 0; i < ENGINE_COUNT; i++) {
       if (i == ENGINE_VOCODER)
@@ -366,15 +368,21 @@ NativeAudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
         std::memset(mixBuffer_.data(), 0, totalSamples * sizeof(float));
         engines_[i]->process(mixBuffer_.data(), numFrames);
 
-        // Mix to final output AND to carrier buffer (mono for vocoder)
+        // Mix to carrier buffer (mono for vocoder)
         for (int j = 0; j < numFrames; j++) {
           float left = mixBuffer_[j * 2];
           float right = mixBuffer_[j * 2 + 1];
           float monoMix = (left + right) * 0.5f;
 
           carrierBuffer[j] += monoMix;
-          output[j * 2] += left;
-          output[j * 2 + 1] += right;
+
+          // CRITICAL: Only add carriers to final output if Vocoder is DISABLED.
+          // If Vocoder is enabled, the Tormenta (mix) parameter controls the
+          // blend.
+          if (!vocoderEnabled) {
+            output[j * 2] += left;
+            output[j * 2 + 1] += right;
+          }
         }
       }
     }

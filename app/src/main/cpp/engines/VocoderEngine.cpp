@@ -18,10 +18,7 @@ void VocoderEngine::prepare(int32_t sampleRate, int32_t framesPerBuffer) {
 void VocoderEngine::process(float *output, int32_t numFrames) {
   std::lock_guard<std::mutex> lock(stateMutex_);
 
-  if (modulatorBuffer_.empty()) {
-    std::fill(output, output + numFrames * 2, 0.0f);
-    return;
-  }
+  bool hasModulator = !modulatorBuffer_.empty();
 
   // Ensure carrier buffer size
   if (carrierBuffer_.size() < static_cast<size_t>(numFrames)) {
@@ -30,9 +27,11 @@ void VocoderEngine::process(float *output, int32_t numFrames) {
 
   // Prepare mono modulator chunk
   std::vector<float> modChunk(numFrames, 0.0f);
-  for (int i = 0; i < numFrames; i++) {
-    modChunk[i] = modulatorBuffer_[modulatorReadIndex_];
-    modulatorReadIndex_ = (modulatorReadIndex_ + 1) % modulatorBuffer_.size();
+  if (hasModulator) {
+    for (int i = 0; i < numFrames; i++) {
+      modChunk[i] = modulatorBuffer_[modulatorReadIndex_];
+      modulatorReadIndex_ = (modulatorReadIndex_ + 1) % modulatorBuffer_.size();
+    }
   }
 
   // Process through vocoder (mono output)
@@ -55,20 +54,21 @@ void VocoderEngine::updateParameters(const SynthState &state) {
   std::lock_guard<std::mutex> lock(stateMutex_);
   currentState_ = state;
 
-  // Presión = Intensity / Gain
-  masterGain_ = 0.2f + state.pressure * 1.8f;
+  // Presión = Intensity / Gain (Mapecado directo e potente)
+  masterGain_ = 0.5f + state.pressure * 6.5f;
   processor_->setIntensity(state.pressure);
 
   // Resonancia = Q das bandas
   processor_->setResonance(state.resonance);
 
-  // Viscosidade = Noise Threshold (Gate)
+  // Viscosidade = Noise Threshold (Porta de ruído)
   processor_->setNoiseThreshold(state.viscosity);
 
-  // Tormenta = (Sin uso claro aún, tal vez mezcla con carrier seco)
+  // Tormenta = Mix de Vocoder / Portadora Seca
   processor_->setMix(state.turbulence);
 
-  // Difusión = (Sin uso aún)
+  // Difusión = Tempo de Relaxación (Release) dos filtros
+  processor_->setDiffusion(state.diffusion);
 }
 
 int32_t VocoderEngine::playNote(float frequency, float velocity) {

@@ -19,7 +19,8 @@ public:
   void setIntensity(float intensity);      // Presión
   void setResonance(float resonance);      // Resonancia (Q do filtro)
   void setNoiseThreshold(float threshold); // Viscosidade (Gate)
-  void setMix(float mix);                  // Difusión
+  void setMix(float mix);                  // Tormenta (Wet/Dry)
+  void setDiffusion(float diffusion);      // Difusión (Release)
 
 private:
   float mSampleRate;
@@ -39,6 +40,7 @@ private:
   ParameterSmoother sResonance{5.0f};
   ParameterSmoother sNoiseThreshold{0.01f};
   ParameterSmoother sMix{0.5f};
+  ParameterSmoother sDiffusion{1.0f};
 
   void setupBands();
 };

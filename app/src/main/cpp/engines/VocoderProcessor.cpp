@@ -14,6 +14,7 @@ VocoderProcessor::VocoderProcessor(float sampleRate) : mSampleRate(sampleRate) {
   sResonance.setTimeConstant(30.0f, sampleRate);
   sNoiseThreshold.setTimeConstant(20.0f, sampleRate);
   sMix.setTimeConstant(20.0f, sampleRate);
+  sDiffusion.setTimeConstant(20.0f, sampleRate);
 }
 
 void VocoderProcessor::setupBands() {
@@ -48,42 +49,75 @@ void VocoderProcessor::process(const float *modulator, const float *carrier,
       lastRes = resonance;
     }
 
-    // Modulador: Preamplificación e filtrado
-    float modSample = modulator[frame] * 12.0f;
+    // Modulador: Preamplificación forte (x25), saturación suave e filtrado
+    float modSample = modulator[frame] * 25.0f;
+    modSample =
+        fastTanh(modSample); // Saturación para mellor análise sen clipping duro
     modSample = mModHPF.process(modSample);
 
     // Carrier
     float carSample = carrier[frame];
 
+    float mix = sMix.process();
+    float diffusion = sDiffusion.process();
+
+    // Actualizar release dos sobre se cambiou a difusión significativamente
+    static float lastDiff = -1.0f;
+    if (std::abs(diffusion - lastDiff) > 0.05f) {
+      // Mapeamos 0..1 a 20ms..500ms de release
+      float releaseMs = 20.0f + diffusion * 480.0f;
+      for (int i = 0; i < 16; i++) {
+        mBands[i].envelope.setRelease(releaseMs);
+      }
+      lastDiff = diffusion;
+    }
+
     float vocodeOutput = 0.0f;
 
     // Vocoding por bandas
+    int bandIdx = 0;
     for (auto &band : mBands) {
       float modFiltered = band.modFilter.process(modSample);
       float env = band.envelope.process(modFiltered);
 
+      // Boost progresivo en agudos para claridade (sibilancia) - FORTE
+      float bandBoost =
+          1.0f + (static_cast<float>(bandIdx) / 15.0f) * 3.0f; // Was 1.5f
+
       // Porta de ruído e aplicación do sobre ao carrier
       if (env > threshold) {
         float carFiltered = band.carFilter.process(carSample);
-        vocodeOutput += carFiltered * (env - threshold * 0.5f);
+        // Use envelope directly (more responsive to transients)
+        vocodeOutput += carFiltered * env * bandBoost;
       }
+      bandIdx++;
     }
 
     // Mix final e ganancia master (compensación de bandas)
-    vocodeOutput *= intensity * 0.8f;
+    vocodeOutput *=
+        intensity * 4.0f; // Significant boost to match carrier levels
 
-    // Suave limitación (soft clip)
-    if (vocodeOutput > 1.0f)
-      vocodeOutput = 1.0f;
-    if (vocodeOutput < -1.0f)
-      vocodeOutput = -1.0f;
+    // Suave limitación SOLO ao vocodeo procesado (antes de mix)
+    // No clipping here - we want the vocoder to be as loud as the carrier
 
-    output[frame] = vocodeOutput;
+    // Blend con seco (Tormenta) - Crossfade real
+    // mix=0: sólo carrier. mix=1: sólo vocoder
+    float finalOut = (vocodeOutput * mix) + (carSample * (1.0f - mix));
+
+    // Soft clip aí final
+    if (finalOut > 1.0f)
+      finalOut = 1.0f;
+    if (finalOut < -1.0f)
+      finalOut = -1.0f;
+
+    output[frame] = finalOut;
   }
 }
 
 void VocoderProcessor::setIntensity(float intensity) {
-  sIntensity.setTarget(std::clamp(intensity * 4.0f, 0.1f, 6.0f));
+  // Mapeo cuadrático: 0.5 a 8.0 (mellor control en baixos)
+  float val = 0.5f + (intensity * intensity) * 7.5f;
+  sIntensity.setTarget(val);
 }
 
 void VocoderProcessor::setResonance(float resonance) {
@@ -92,9 +126,14 @@ void VocoderProcessor::setResonance(float resonance) {
 }
 
 void VocoderProcessor::setNoiseThreshold(float threshold) {
-  sNoiseThreshold.setTarget(std::clamp(threshold * 0.2f, 0.005f, 0.2f));
+  // Rango para evitar leaks: 0.005 a 0.15 (máis alto para reducir ruído)
+  sNoiseThreshold.setTarget(0.005f + threshold * 0.145f);
 }
 
 void VocoderProcessor::setMix(float mix) {
   sMix.setTarget(std::clamp(mix, 0.0f, 1.0f));
+}
+
+void VocoderProcessor::setDiffusion(float diffusion) {
+  sDiffusion.setTarget(std::clamp(diffusion, 0.0f, 1.0f));
 }
