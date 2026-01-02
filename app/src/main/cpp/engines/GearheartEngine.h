@@ -14,9 +14,7 @@ struct GearVoice {
   bool active = false;
   InstrumentType type = InstrumentType::TOM;
 
-  float frequency = 0.0f; // Base freq
-  float startFreq = 0.0f;
-  float endFreq = 0.0f;
+  float frequency = 0.0f; // Base freq for TOM
 
   // Oscillators
   float phase = 0.0f;

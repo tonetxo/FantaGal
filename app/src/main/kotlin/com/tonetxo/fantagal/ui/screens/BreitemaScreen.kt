@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tonetxo.fantagal.audio.SynthEngine
 import com.tonetxo.fantagal.ui.components.EngineHeader
+import com.tonetxo.fantagal.ui.components.ParameterSlider
 import com.tonetxo.fantagal.ui.theme.BreitemaBlue
 import com.tonetxo.fantagal.ui.theme.StoneBackground
 import com.tonetxo.fantagal.viewmodel.SynthViewModel
@@ -121,21 +122,21 @@ fun BreitemaScreen(
                 ) {
                     Text("PARÁMETROS BRÉTEMA", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp))
                     
-                    BreitemaParamSlider("PRESIÓN", synthState.pressure) { 
+                    ParameterSlider("PRESIÓN", synthState.pressure, { 
                         viewModel.updateEngineParameter(SynthEngine.BREITEMA, "pressure", it)
-                    }
-                    BreitemaParamSlider("RESONANCIA", synthState.resonance) { 
+                    }, accentColor = BreitemaBlue)
+                    ParameterSlider("RESONANCIA", synthState.resonance, { 
                         viewModel.updateEngineParameter(SynthEngine.BREITEMA, "resonance", it)
-                    }
-                    BreitemaParamSlider("VISCOSIDADE", synthState.viscosity) { 
+                    }, accentColor = BreitemaBlue)
+                    ParameterSlider("VISCOSIDADE", synthState.viscosity, { 
                         viewModel.updateEngineParameter(SynthEngine.BREITEMA, "viscosity", it)
-                    }
-                    BreitemaParamSlider("TORMENTA", synthState.turbulence) { 
+                    }, accentColor = BreitemaBlue)
+                    ParameterSlider("TORMENTA", synthState.turbulence, { 
                         viewModel.updateEngineParameter(SynthEngine.BREITEMA, "turbulence", it)
-                    }
-                    BreitemaParamSlider("DIFUSIÓN", synthState.diffusion) { 
+                    }, accentColor = BreitemaBlue)
+                    ParameterSlider("DIFUSIÓN", synthState.diffusion, { 
                         viewModel.updateEngineParameter(SynthEngine.BREITEMA, "diffusion", it)
-                    }
+                    }, accentColor = BreitemaBlue)
                 }
             }
 
@@ -406,28 +407,5 @@ fun VhsScanlines() {
                 size = Size(size.width, scanlineHeight)
             )
         }
-    }
-}
-
-@Composable
-fun BreitemaParamSlider(label: String, value: Float, onValueChange: (Float) -> Unit) {
-    Column(modifier = Modifier.padding(vertical = 4.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(label, color = Color.White, fontSize = 10.sp)
-            Text(String.format("%.2f", value), color = Color.Gray, fontSize = 10.sp)
-        }
-        Slider(
-            value = value,
-            onValueChange = onValueChange,
-            colors = SliderDefaults.colors(
-                thumbColor = BreitemaBlue,
-                activeTrackColor = BreitemaBlue,
-                inactiveTrackColor = Color.DarkGray
-            ),
-            modifier = Modifier.height(20.dp)
-        )
     }
 }

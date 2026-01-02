@@ -141,6 +141,10 @@ private:
   // Temporary buffer for mixing
   std::vector<float> mixBuffer_;
 
+  // Pre-allocated carrier buffer for Vocoder (avoids allocation in audio
+  // thread)
+  std::vector<float> vocoderCarrierBuffer_;
+
   std::mutex engineMutex_;
   int selectedEngineType_ = ENGINE_CRIOSFERA; // For note routing
 

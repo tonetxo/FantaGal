@@ -38,6 +38,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tonetxo.fantagal.ui.components.EngineHeader
+import com.tonetxo.fantagal.ui.components.ParameterSlider
 import com.tonetxo.fantagal.ui.theme.StoneSurface
 import com.tonetxo.fantagal.audio.SynthState
 import com.tonetxo.fantagal.viewmodel.SynthViewModel
@@ -335,47 +336,24 @@ fun GearheartScreen(viewModel: SynthViewModel) {
                     // Independent parameters using per-engine state
                     val gearState by viewModel.getEngineState(SynthEngine.GEARHEART).collectAsState()
                     
-                    ParamSlider("ROZAMENTO", gearState.pressure) { 
+                    ParameterSlider("ROZAMENTO", gearState.pressure, { 
                         viewModel.updateEngineParameter(SynthEngine.GEARHEART, "pressure", it)
-                    }
-                    ParamSlider("REVERBERACIÓN", gearState.resonance) { 
+                    }, accentColor = Color(0xFFCD7F32))
+                    ParameterSlider("REVERBERACIÓN", gearState.resonance, { 
                         viewModel.updateEngineParameter(SynthEngine.GEARHEART, "resonance", it)
-                    }
-                    ParamSlider("LUBRICACIÓN", gearState.viscosity) { 
+                    }, accentColor = Color(0xFFCD7F32))
+                    ParameterSlider("LUBRICACIÓN", gearState.viscosity, { 
                         viewModel.updateEngineParameter(SynthEngine.GEARHEART, "viscosity", it)
-                    }
-                    ParamSlider("VELOCIDADE", gearState.turbulence) { 
+                    }, accentColor = Color(0xFFCD7F32))
+                    ParameterSlider("VELOCIDADE", gearState.turbulence, { 
                         viewModel.updateEngineParameter(SynthEngine.GEARHEART, "turbulence", it)
-                    }
-                    ParamSlider("DIFUSIÓN METÁLICA", gearState.diffusion) { 
+                    }, accentColor = Color(0xFFCD7F32))
+                    ParameterSlider("DIFUSIÓN METÁLICA", gearState.diffusion, { 
                         viewModel.updateEngineParameter(SynthEngine.GEARHEART, "diffusion", it)
-                    }
+                    }, accentColor = Color(0xFFCD7F32))
                 }
             }
         }
-    }
-}
-
-@Composable
-fun ParamSlider(label: String, value: Float, onValueChange: (Float) -> Unit) {
-    Column(modifier = Modifier.padding(vertical = 4.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(label, color = Color.White, fontSize = 10.sp)
-            Text(String.format("%.2f", value), color = Color.Gray, fontSize = 10.sp)
-        }
-        Slider(
-            value = value,
-            onValueChange = onValueChange,
-            colors = SliderDefaults.colors(
-                thumbColor = Color(0xFFCD7F32),
-                activeTrackColor = Color(0xFFCD7F32),
-                inactiveTrackColor = Color.DarkGray
-            ),
-            modifier = Modifier.height(20.dp)
-        )
     }
 }
 

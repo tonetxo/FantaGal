@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import com.tonetxo.fantagal.ui.components.AudioVisualizer
 import com.tonetxo.fantagal.ui.components.EngineHeader
 import com.tonetxo.fantagal.ui.components.ParameterDropdown
+import com.tonetxo.fantagal.ui.components.ParameterSlider
 import com.tonetxo.fantagal.ui.components.PianoKeyboard
 import com.tonetxo.fantagal.ui.components.XYPad
 import com.tonetxo.fantagal.ui.theme.CriosferaPrimary
@@ -135,21 +136,21 @@ fun CriosferaScreen(
                 ) {
                     Text("PARÁMETROS CRIOSFERA", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp))
                     
-                    CrioParamSlider("PRESIÓN", crioState.pressure) { 
+                    ParameterSlider("PRESIÓN", crioState.pressure, { 
                         viewModel.updateEngineParameter(SynthEngine.CRIOSFERA, "pressure", it)
-                    }
-                    CrioParamSlider("RESONANCIA", crioState.resonance) { 
+                    }, accentColor = CriosferaPrimary)
+                    ParameterSlider("RESONANCIA", crioState.resonance, { 
                         viewModel.updateEngineParameter(SynthEngine.CRIOSFERA, "resonance", it)
-                    }
-                    CrioParamSlider("VISCOSIDADE", crioState.viscosity) { 
+                    }, accentColor = CriosferaPrimary)
+                    ParameterSlider("VISCOSIDADE", crioState.viscosity, { 
                         viewModel.updateEngineParameter(SynthEngine.CRIOSFERA, "viscosity", it)
-                    }
-                    CrioParamSlider("TORMENTA", crioState.turbulence) { 
+                    }, accentColor = CriosferaPrimary)
+                    ParameterSlider("TORMENTA", crioState.turbulence, { 
                         viewModel.updateEngineParameter(SynthEngine.CRIOSFERA, "turbulence", it)
-                    }
-                    CrioParamSlider("DIFUSIÓN", crioState.diffusion) { 
+                    }, accentColor = CriosferaPrimary)
+                    ParameterSlider("DIFUSIÓN", crioState.diffusion, { 
                         viewModel.updateEngineParameter(SynthEngine.CRIOSFERA, "diffusion", it)
-                    }
+                    }, accentColor = CriosferaPrimary)
                 }
                 Spacer(modifier = Modifier.height(8.dp))
             }
@@ -219,28 +220,5 @@ fun CriosferaScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
         }
-    }
-}
-
-@Composable
-fun CrioParamSlider(label: String, value: Float, onValueChange: (Float) -> Unit) {
-    Column(modifier = Modifier.padding(vertical = 4.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(label, color = Color.White, fontSize = 10.sp)
-            Text(String.format("%.2f", value), color = Color.Gray, fontSize = 10.sp)
-        }
-        Slider(
-            value = value,
-            onValueChange = onValueChange,
-            colors = SliderDefaults.colors(
-                thumbColor = CriosferaPrimary,
-                activeTrackColor = CriosferaPrimary,
-                inactiveTrackColor = Color.DarkGray
-            ),
-            modifier = Modifier.height(20.dp)
-        )
     }
 }

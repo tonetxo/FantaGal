@@ -91,6 +91,9 @@ void NativeAudioEngine::createStream() {
   // Allocate mix buffer
   mixBuffer_.resize(framesPerBuffer_ * channelCount_);
 
+  // Pre-allocate carrier buffer for Vocoder (avoids allocation in onAudioReady)
+  vocoderCarrierBuffer_.resize(framesPerBuffer_, 0.0f);
+
   // Prepare all engines
   std::lock_guard<std::mutex> lock(engineMutex_);
   for (int i = 0; i < ENGINE_COUNT; i++) {
@@ -356,7 +359,13 @@ NativeAudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
     std::lock_guard<std::mutex> lock(engineMutex_);
 
     // Tapping logic for Vocoder: mix everything except vocoder first
-    std::vector<float> carrierBuffer(numFrames, 0.0f);
+    // Use pre-allocated buffer instead of allocating in audio callback
+    if (vocoderCarrierBuffer_.size() < static_cast<size_t>(numFrames)) {
+      vocoderCarrierBuffer_.resize(numFrames);
+    }
+    std::fill(vocoderCarrierBuffer_.begin(),
+              vocoderCarrierBuffer_.begin() + numFrames, 0.0f);
+
     bool vocoderEnabled =
         engines_[ENGINE_VOCODER] && engineEnabled_[ENGINE_VOCODER];
 
@@ -374,7 +383,7 @@ NativeAudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
           float right = mixBuffer_[j * 2 + 1];
           float monoMix = (left + right) * 0.5f;
 
-          carrierBuffer[j] += monoMix;
+          vocoderCarrierBuffer_[j] += monoMix;
 
           // CRITICAL: Only add carriers to final output if Vocoder is DISABLED.
           // If Vocoder is enabled, the Tormenta (mix) parameter controls the
@@ -391,7 +400,7 @@ NativeAudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
     if (engines_[ENGINE_VOCODER] && engineEnabled_[ENGINE_VOCODER]) {
       auto *vocoder =
           static_cast<VocoderEngine *>(engines_[ENGINE_VOCODER].get());
-      vocoder->setCarrierBuffer(carrierBuffer.data(), numFrames);
+      vocoder->setCarrierBuffer(vocoderCarrierBuffer_.data(), numFrames);
 
       std::memset(mixBuffer_.data(), 0, totalSamples * sizeof(float));
       vocoder->process(mixBuffer_.data(), numFrames);

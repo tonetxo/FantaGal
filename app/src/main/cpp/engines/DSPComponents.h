@@ -5,6 +5,9 @@
 #include <cmath>
 #include <vector>
 
+// Centralized audio constants
+constexpr float TWO_PI = 6.28318530718f;
+
 /**
  * Filtro biquad bandpass.
  */

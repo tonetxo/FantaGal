@@ -37,16 +37,14 @@ void VocoderProcessor::process(const float *modulator, const float *carrier,
     float resonance = sResonance.process();
     float threshold = sNoiseThreshold.process();
     // Actualizar Q das bandas se cambiou a resonancia significativamente
-    // (Poderíase optimizar para non facelo cada frame se o rendemento sofre)
-    static float lastRes = -1.0f;
-    if (std::abs(resonance - lastRes) > 0.1f) {
+    if (std::abs(resonance - lastRes_) > 0.1f) {
       const float freqs[16] = {150,  220,  320,  440,  620,  850,  1150, 1500,
                                2000, 2600, 3400, 4400, 5600, 6800, 8200, 10000};
       for (int i = 0; i < 16; i++) {
         mBands[i].modFilter.setCoefficients(freqs[i], resonance, mSampleRate);
         mBands[i].carFilter.setCoefficients(freqs[i], resonance, mSampleRate);
       }
-      lastRes = resonance;
+      lastRes_ = resonance;
     }
 
     // Modulador: Preamplificación forte (x25), saturación suave e filtrado
@@ -62,14 +60,13 @@ void VocoderProcessor::process(const float *modulator, const float *carrier,
     float diffusion = sDiffusion.process();
 
     // Actualizar release dos sobre se cambiou a difusión significativamente
-    static float lastDiff = -1.0f;
-    if (std::abs(diffusion - lastDiff) > 0.05f) {
+    if (std::abs(diffusion - lastDiff_) > 0.05f) {
       // Mapeamos 0..1 a 20ms..500ms de release
       float releaseMs = 20.0f + diffusion * 480.0f;
       for (int i = 0; i < 16; i++) {
         mBands[i].envelope.setRelease(releaseMs);
       }
-      lastDiff = diffusion;
+      lastDiff_ = diffusion;
     }
 
     float vocodeOutput = 0.0f;

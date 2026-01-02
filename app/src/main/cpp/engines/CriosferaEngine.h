@@ -86,6 +86,9 @@ private:
   float reverbDecay_ = 0.85f;
   float reverbMix_ = 0.4f;
 
+  // Smoothed cutoff for global filter (moved from static in process())
+  float smoothedCutoff_ = 1000.0f;
+
   // Global lowpass filter
   float globalFilterState_[2][2] = {{0.0f, 0.0f}, {0.0f, 0.0f}};
 

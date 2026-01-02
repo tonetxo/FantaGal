@@ -43,4 +43,8 @@ private:
   ParameterSmoother sDiffusion{1.0f};
 
   void setupBands();
+
+  // Tracking for parameter change optimization (moved from static in process())
+  float lastRes_ = -1.0f;
+  float lastDiff_ = -1.0f;
 };

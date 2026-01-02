@@ -174,10 +174,9 @@ void CriosferaEngine::process(float *output, int32_t numFrames) {
     targetCutoff = std::clamp(targetCutoff, 100.0f, 15000.0f);
 
     // Smooth the cutoff changes to avoid clicks when dragging
-    static float smoothedCutoff = 1000.0f;
-    smoothedCutoff += (targetCutoff - smoothedCutoff) * 0.01f;
+    smoothedCutoff_ += (targetCutoff - smoothedCutoff_) * 0.01f;
 
-    float filtered = resonantFilter(voiceMix, smoothedCutoff, filterQ_,
+    float filtered = resonantFilter(voiceMix, smoothedCutoff_, filterQ_,
                                     globalFilterState_[0]);
 
     // Simple delay

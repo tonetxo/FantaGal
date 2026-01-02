@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tonetxo.fantagal.audio.SynthEngine
 import com.tonetxo.fantagal.ui.components.EngineHeader
+import com.tonetxo.fantagal.ui.components.ParameterSlider
 import com.tonetxo.fantagal.ui.theme.StoneBackground
 import com.tonetxo.fantagal.ui.theme.VocoderGreen
 import com.tonetxo.fantagal.viewmodel.SynthViewModel
@@ -92,21 +93,21 @@ fun VocoderScreen(
                 ) {
                     Text("PARÁMETROS VOCODER", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp))
                     
-                    VocoderParamSlider("PRESIÓN (GAIN)", engineState.pressure) { 
+                    ParameterSlider("PRESIÓN (GAIN)", engineState.pressure, { 
                         viewModel.updateEngineParameter(SynthEngine.VOCODER, "pressure", it)
-                    }
-                    VocoderParamSlider("RESONANCIA (Q)", engineState.resonance) { 
+                    }, accentColor = VocoderGreen)
+                    ParameterSlider("RESONANCIA (Q)", engineState.resonance, { 
                         viewModel.updateEngineParameter(SynthEngine.VOCODER, "resonance", it)
-                    }
-                    VocoderParamSlider("VISCOSIDADE (GATE)", engineState.viscosity) { 
+                    }, accentColor = VocoderGreen)
+                    ParameterSlider("VISCOSIDADE (GATE)", engineState.viscosity, { 
                         viewModel.updateEngineParameter(SynthEngine.VOCODER, "viscosity", it)
-                    }
-                    VocoderParamSlider("TORMENTA (MIX)", engineState.turbulence) { 
+                    }, accentColor = VocoderGreen)
+                    ParameterSlider("TORMENTA (MIX)", engineState.turbulence, { 
                         viewModel.updateEngineParameter(SynthEngine.VOCODER, "turbulence", it)
-                    }
-                    VocoderParamSlider("DIFUSIÓN (OUTPUT)", engineState.diffusion) { 
+                    }, accentColor = VocoderGreen)
+                    ParameterSlider("DIFUSIÓN (OUTPUT)", engineState.diffusion, { 
                         viewModel.updateEngineParameter(SynthEngine.VOCODER, "diffusion", it)
-                    }
+                    }, accentColor = VocoderGreen)
                 }
             }
 
@@ -155,28 +156,5 @@ fun VocoderScreen(
 
             Spacer(modifier = Modifier.height(100.dp)) // Piano spacing
         }
-    }
-}
-
-@Composable
-fun VocoderParamSlider(label: String, value: Float, onValueChange: (Float) -> Unit) {
-    Column(modifier = Modifier.padding(vertical = 4.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(label, color = Color.White, fontSize = 10.sp)
-            Text(String.format("%.2f", value), color = Color.Gray, fontSize = 10.sp)
-        }
-        Slider(
-            value = value,
-            onValueChange = onValueChange,
-            colors = SliderDefaults.colors(
-                thumbColor = VocoderGreen,
-                activeTrackColor = VocoderGreen,
-                inactiveTrackColor = Color.DarkGray
-            ),
-            modifier = Modifier.height(20.dp)
-        )
     }
 }
