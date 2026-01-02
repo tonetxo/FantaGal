@@ -193,13 +193,18 @@ void BreitemaEngine::generateRandomPattern() {
   // or during initialization.
   for (int i = 0; i < NUM_STEPS; ++i) {
     if (rhythmMode_ == 1) { // muineira
-      stepProbabilities_[i] = MUINEIRA[i];
-      steps_[i] = MUINEIRA[i] > 0.5f;
+      // Use basis but allow for random omissions or additions
+      float prob =
+          MUINEIRA[i] > 0.5f ? 0.7f + dist_(rng_) * 0.3f : dist_(rng_) * 0.2f;
+      stepProbabilities_[i] = prob;
+      steps_[i] = prob > 0.4f;
     } else if (rhythmMode_ == 2) { // ribeirada
-      stepProbabilities_[i] = RIBEIRADA[i];
-      steps_[i] = RIBEIRADA[i] > 0.5f;
+      float prob =
+          RIBEIRADA[i] > 0.5f ? 0.7f + dist_(rng_) * 0.3f : dist_(rng_) * 0.2f;
+      stepProbabilities_[i] = prob;
+      steps_[i] = prob > 0.4f;
     } else {
-      stepProbabilities_[i] = dist_(rng_);
+      stepProbabilities_[i] = 0.3f + dist_(rng_) * 0.7f;
       steps_[i] = dist_(rng_) > 0.5f;
     }
   }

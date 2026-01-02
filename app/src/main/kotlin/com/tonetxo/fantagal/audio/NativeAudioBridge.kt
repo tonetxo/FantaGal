@@ -139,7 +139,7 @@ class NativeAudioBridge {
     }
 
     fun getBreitemaData(): BreitemaState {
-        val buffer = FloatArray(35)
+        val buffer = FloatArray(38)
         val count = nativeGetBreitemaData(buffer)
         if (count < 35) return BreitemaState()
 
@@ -154,16 +154,11 @@ class NativeAudioBridge {
             currentStep = buffer[0].toInt(),
             rhythmMode = buffer[1].toInt(),
             isPlaying = buffer[2] > 0.5f,
-            fogDensity = buffer[19], // Wait, let's check the buffer mapping in JNI
-            // In C++ getBreitemaData:
-            // destination[0] = currentStep
-            // destination[1] = rhythmMode
-            // destination[2] = isPlaying
-            // destination[3..18] = stepProbabilities (16)
-            // destination[19..34] = steps (16)
-            // Wait, I didn't include fogDensity in getBreitemaData C++ implementation!
             stepProbabilities = probs.toList(),
-            steps = steps.toList()
+            steps = steps.toList(),
+            fogDensity = if (count >= 36) buffer[35] else 0.5f,
+            fogMovement = if (count >= 37) buffer[36] else 0.5f,
+            fmDepth = if (count >= 38) buffer[37] else 200f
         )
     }
 
