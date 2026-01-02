@@ -44,8 +44,9 @@ void GearheartEngine::updateParameters(const SynthState &state) {
   turbulence_ = state.turbulence;
   diffusion_ = state.diffusion;
 
-  // Master gain depends on pressure (0.3 - 0.9 range)
-  masterGain_ = 0.3f + pressure_ * 0.6f;
+  // Master gain depends on pressure (0.35 - 0.75 range)
+  // Reduced from 0.4-0.9 to provide headroom for multiple voices
+  masterGain_ = 0.35f + pressure_ * 0.4f;
 }
 
 void GearheartEngine::updateGear(int32_t id, float speed, bool isConnected,
@@ -132,8 +133,8 @@ void GearheartEngine::process(float *output, int32_t numFrames) {
     reverbBuffer_[reverbWriteIndex_] = mix * 0.3f + reverbSample * feedback;
     reverbWriteIndex_ = (reverbWriteIndex_ + 1) % reverbBuffer_.size();
 
-    // Reverb Mix
-    float finalMix = mix + reverbSample * (resonance_ * 0.6f);
+    // Reverb Mix - scaled conservatively to prevent clipping
+    float finalMix = mix + reverbSample * (resonance_ * 0.45f);
     finalMix = softClip(finalMix * masterGain_);
 
     output[frame * 2] = finalMix;
@@ -184,7 +185,9 @@ void GearheartEngine::triggerSound(const AudioGear &gear) {
   // Determine Instrument by material first, then by ID
   if (gear.id == 0) {
     voice->type = InstrumentType::KICK;
-    voice->envDecay = 0.3f * decayScale;
+    // Kicks need more minimum body: 0.5f floor for decayScale
+    float kickDecayScale = std::max(0.5f, decayScale);
+    voice->envDecay = 0.3f * kickDecayScale;
   } else if (gear.material == 4) { // Platinum
     voice->type = InstrumentType::HIHAT;
     voice->envDecay = 0.05f * decayScale;
@@ -230,50 +233,37 @@ float GearheartEngine::getNextSample(GearVoice &v) {
 }
 
 float GearheartEngine::synthesizeKick(GearVoice &v) {
-  // Based on original TS playKickDrum
-  // Sub-bass oscillator: 55Hz -> 30Hz sweep
-  float sweep = std::max(0.0f, 1.0f - v.envTime / 0.15f);
-  float freq = 30.0f + 25.0f * sweep;
+  // FAST Exponential Sweep for massive punch: 120Hz -> 38Hz
+  // Drops 70% of frequency in first 30ms
+  float sweepEnv = std::exp(-v.envTime * 35.0f);
+  float freq = 38.0f + 82.0f * sweepEnv;
 
   v.phase += freq / sampleRate_;
   if (v.phase >= 1.0f)
     v.phase -= 1.0f;
   float sine = std::sin(v.phase * TWO_PI);
 
-  // Click transient: 150Hz -> 40Hz
-  float clickSweep = std::max(0.0f, 1.0f - v.envTime / 0.03f);
-  float clickFreq = 40.0f + 110.0f * (clickSweep * clickSweep);
+  // Click transient: harder drop 250Hz -> 60Hz
+  float clickSweep = std::exp(-v.envTime * 80.0f);
+  float clickFreq = 60.0f + 190.0f * clickSweep;
   v.phase2 += clickFreq / sampleRate_;
   if (v.phase2 >= 1.0f)
     v.phase2 -= 1.0f;
   float tri = 4.0f * std::abs(v.phase2 - 0.5f) - 1.0f;
 
-  // Sub envelope: attack 3ms, then decay
-  float subEnv = 0.0f;
-  if (v.envTime < 0.003f) {
-    subEnv = v.envTime / 0.003f; // Linear attack
-  } else {
-    subEnv = std::exp(-(v.envTime - 0.003f) * (1.0f / v.envDecay) * 3.0f);
-  }
+  // Envelopes: Pure Exponential for tighter thump
+  // Body (Sine)
+  float subEnv = std::exp(-v.envTime * (4.0f / v.envDecay));
 
-  // Click envelope: attack 2ms, fast decay
-  float clickEnv = 0.0f;
-  if (v.envTime < 0.002f) {
-    clickEnv = v.envTime / 0.002f;
-  } else {
-    clickEnv = std::exp(-(v.envTime - 0.002f) * 40.0f);
-  }
+  // Click (Transient) - very fast
+  float clickEnv = std::exp(-v.envTime * 150.0f);
 
-  // Moderate gains with tanh saturation to prevent distortion
-  float out = (sine * subEnv * 1.5f + tri * clickEnv * 1.0f) * v.gain;
+  // Per-voice saturation to fatten the sound before voice gain
+  // This prevents the "tom" sound by adding harmonic density
+  float raw = (sine * subEnv * 2.8f + tri * clickEnv * 1.8f);
+  float saturated = std::tanh(raw);
 
-  // Diffusion adds metallic noise
-  if (diffusion_ > 0.05f) {
-    float noiseAmount = diffusion_ * 0.4f * subEnv;
-    out += lowpass(generateNoise() * noiseAmount, 2000.0f, v.noiseFilterState);
-  }
-
-  return out;
+  return saturated * v.gain;
 }
 
 float GearheartEngine::synthesizeTom(GearVoice &v) {

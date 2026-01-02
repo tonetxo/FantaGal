@@ -4,6 +4,7 @@ import com.tonetxo.fantagal.audio.SynthEngine
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -117,6 +118,8 @@ fun GearheartScreen(viewModel: SynthViewModel) {
                 // 2. Propagation (Flood Fill)
                 var changed = true
                 var iterations = 0
+                val margin = 35f // Increased connection tolerance for better UX
+                
                 while (changed && iterations < 10) {
                     changed = false
                     iterations++
@@ -127,13 +130,11 @@ fun GearheartScreen(viewModel: SynthViewModel) {
                         for (j in 0 until gears.size) {
                             if (i == j) continue
                             if (gears[j].isConnected) continue
-                            if (gears[j].isDragging) continue
                             
                             val dx = gears[i].x - gears[j].x
                             val dy = gears[i].y - gears[j].y
                             val dist = pyt(dx, dy)
                             val combinedRadius = gears[i].radius + gears[j].radius
-                            val margin = 25f // Connection tolerance
                             
                             if (dist < combinedRadius + margin) {
                                 gears[j].isConnected = true
@@ -198,23 +199,15 @@ fun GearheartScreen(viewModel: SynthViewModel) {
                             val touchX = offset.x
                             val touchY = offset.y
                             
-                            // Check draggable gears (1..4) - reverse to check top-most first
+                            // Check for gear drag (1..4)
                             for (i in gears.size - 1 downTo 1) {
                                 val g = gears[i]
                                 val dx = touchX - g.x
                                 val dy = touchY - g.y
-                                if (pyt(dx, dy) < g.radius) {
+                                if (pyt(dx, dy) < g.radius * 1.5f) {
                                     g.isDragging = true
                                     break
                                 }
-                            }
-                            
-                            // Motor toggle (index 0)
-                            val motor = gears[0]
-                            val dx = touchX - motor.x
-                            val dy = touchY - motor.y
-                            if (pyt(dx, dy) < motor.radius * 1.2f) { 
-                                viewModel.toggleEngine(SynthEngine.GEARHEART)
                             }
                         },
                         onDrag = { change, dragAmount ->
@@ -234,10 +227,48 @@ fun GearheartScreen(viewModel: SynthViewModel) {
                         }
                     )
                 }
+                .pointerInput(Unit) {
+                    detectTapGestures { offset ->
+                        // Motor toggle (index 0)
+                        val motor = gears[0]
+                        val dx = offset.x - motor.x
+                        val dy = offset.y - motor.y
+                        if (pyt(dx, dy) < motor.radius * 1.5f) { 
+                            viewModel.toggleEngine(SynthEngine.GEARHEART)
+                        }
+                    }
+                }
         ) {
             // Read frameCounter to trigger redraw
             @Suppress("UNUSED_VARIABLE")
             val tick = frameCounter
+            
+            // Draw Connection Lines First
+            val margin = 35f
+            for (i in 0 until gears.size) {
+                if (!gears[i].isConnected) continue
+                for (j in 0 until gears.size) {
+                    if (i == j) continue
+                    if (!gears[j].isConnected) continue
+                    // Only draw if J is driven by I (depth check)
+                    if (gears[j].depth == gears[i].depth + 1) {
+                         val dx = gears[i].x - gears[j].x
+                         val dy = gears[i].y - gears[j].y
+                         val dist = pyt(dx, dy)
+                         val combinedRadius = gears[i].radius + gears[j].radius
+                         
+                         if (dist < combinedRadius + margin + 10f) {
+                             drawLine(
+                                 color = MaterialColors[gears[j].material]?.copy(alpha = 0.5f) ?: Color.White,
+                                 start = Offset(gears[i].x, gears[i].y),
+                                 end = Offset(gears[j].x, gears[j].y),
+                                 strokeWidth = 3.dp.toPx(),
+                                 cap = androidx.compose.ui.graphics.StrokeCap.Round
+                             )
+                         }
+                    }
+                }
+            }
             
             // Draw Gears
             gears.forEach { gear ->
