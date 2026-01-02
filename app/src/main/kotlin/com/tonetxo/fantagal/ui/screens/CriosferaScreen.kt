@@ -186,20 +186,20 @@ fun CriosferaScreen(
                 onValueChange = { x, y ->
                     xValue = x
                     yValue = y
-                    // Map to selected parameters
+                    // Map to selected parameters (ENGINE-SPECIFIC)
                     when (xParam) {
-                        "Presión" -> viewModel.updatePressure(x)
-                        "Resonancia" -> viewModel.updateResonance(x)
-                        "Viscosidade" -> viewModel.updateViscosity(x)
-                        "Turbulencia" -> viewModel.updateTurbulence(x)
-                        "Difusión" -> viewModel.updateDiffusion(x)
+                        "Presión" -> viewModel.updateEngineParameter(SynthEngine.CRIOSFERA, "pressure", x)
+                        "Resonancia" -> viewModel.updateEngineParameter(SynthEngine.CRIOSFERA, "resonance", x)
+                        "Viscosidade" -> viewModel.updateEngineParameter(SynthEngine.CRIOSFERA, "viscosity", x)
+                        "Turbulencia" -> viewModel.updateEngineParameter(SynthEngine.CRIOSFERA, "turbulence", x)
+                        "Difusión" -> viewModel.updateEngineParameter(SynthEngine.CRIOSFERA, "diffusion", x)
                     }
                     when (yParam) {
-                        "Presión" -> viewModel.updatePressure(y)
-                        "Resonancia" -> viewModel.updateResonance(y)
-                        "Viscosidade" -> viewModel.updateViscosity(y)
-                        "Turbulencia" -> viewModel.updateTurbulence(y)
-                        "Difusión" -> viewModel.updateDiffusion(y)
+                        "Presión" -> viewModel.updateEngineParameter(SynthEngine.CRIOSFERA, "pressure", y)
+                        "Resonancia" -> viewModel.updateEngineParameter(SynthEngine.CRIOSFERA, "resonance", y)
+                        "Viscosidade" -> viewModel.updateEngineParameter(SynthEngine.CRIOSFERA, "viscosity", y)
+                        "Turbulencia" -> viewModel.updateEngineParameter(SynthEngine.CRIOSFERA, "turbulence", y)
+                        "Difusión" -> viewModel.updateEngineParameter(SynthEngine.CRIOSFERA, "diffusion", y)
                     }
                 },
                 modifier = Modifier
