@@ -12,6 +12,10 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Settings
+
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,6 +46,9 @@ fun BreitemaScreen(
     val isEngineActive = engineActiveStates[SynthEngine.BREITEMA] ?: false
     val synthState by viewModel.getEngineState(SynthEngine.BREITEMA).collectAsState()
 
+    // Menu visibility state
+    var showMenu by remember { mutableStateOf(false) }
+
     // Polling effect for sequencer state
     LaunchedEffect(isEngineActive) {
         while (isEngineActive) {
@@ -71,12 +78,65 @@ fun BreitemaScreen(
                 .padding(top = 100.dp, start = 16.dp, end = 16.dp, bottom = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Header
-            EngineHeader(
-                title = "BRÉTEMA",
-                isActive = isEngineActive,
-                onToggle = { viewModel.toggleEngine(SynthEngine.BREITEMA) }
-            )
+            // Header row with gear and menu
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                EngineHeader(
+                    title = "BRÉTEMA",
+                    isActive = isEngineActive,
+                    onToggle = { viewModel.toggleEngine(SynthEngine.BREITEMA) }
+                )
+
+                // Settings and menu buttons
+                Row {
+                    IconButton(onClick = { /* Settings - No action as in other engines */ }) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            tint = Color.White.copy(alpha = 0.6f)
+                        )
+                    }
+                    IconButton(onClick = { showMenu = !showMenu }) {
+                        Icon(
+                            imageVector = Icons.Default.Menu,
+                            contentDescription = "Menu",
+                            tint = Color.White.copy(alpha = 0.6f)
+                        )
+                    }
+                }
+            }
+
+            // Parameter Menu (Independent sliders)
+            if (showMenu && isEngineActive) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth(0.9f)
+                        .background(Color.Black.copy(alpha = 0.85f), RoundedCornerShape(12.dp))
+                        .padding(16.dp)
+                ) {
+                    Text("PARÁMETROS BRÉTEMA", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp))
+                    
+                    BreitemaParamSlider("PRESIÓN", synthState.pressure) { 
+                        viewModel.updateEngineParameter(SynthEngine.BREITEMA, "pressure", it)
+                    }
+                    BreitemaParamSlider("RESONANCIA", synthState.resonance) { 
+                        viewModel.updateEngineParameter(SynthEngine.BREITEMA, "resonance", it)
+                    }
+                    BreitemaParamSlider("VISCOSIDADE", synthState.viscosity) { 
+                        viewModel.updateEngineParameter(SynthEngine.BREITEMA, "viscosity", it)
+                    }
+                    BreitemaParamSlider("TORMENTA", synthState.turbulence) { 
+                        viewModel.updateEngineParameter(SynthEngine.BREITEMA, "turbulence", it)
+                    }
+                    BreitemaParamSlider("DIFUSIÓN", synthState.diffusion) { 
+                        viewModel.updateEngineParameter(SynthEngine.BREITEMA, "diffusion", it)
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -313,5 +373,28 @@ fun VhsScanlines() {
                 size = Size(size.width, scanlineHeight)
             )
         }
+    }
+}
+
+@Composable
+fun BreitemaParamSlider(label: String, value: Float, onValueChange: (Float) -> Unit) {
+    Column(modifier = Modifier.padding(vertical = 4.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(label, color = Color.White, fontSize = 10.sp)
+            Text(String.format("%.2f", value), color = Color.Gray, fontSize = 10.sp)
+        }
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            colors = SliderDefaults.colors(
+                thumbColor = BreitemaBlue,
+                activeTrackColor = BreitemaBlue,
+                inactiveTrackColor = Color.DarkGray
+            ),
+            modifier = Modifier.height(20.dp)
+        )
     }
 }
