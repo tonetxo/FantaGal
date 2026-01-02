@@ -213,6 +213,34 @@ class SynthViewModel : ViewModel() {
         return audioBridge.getGearStates()
     }
 
+    // --- BRÉTIMA ENGINE CONTROL ---
+    private val _breitemaState = MutableStateFlow(NativeAudioBridge.BreitemaState())
+    val breitemaState: StateFlow<NativeAudioBridge.BreitemaState> = _breitemaState.asStateFlow()
+
+    fun toggleBreitemaStep(step: Int) {
+        audioBridge.setBreitemaStep(step, true) // toggle logic is native
+        updateBreitemaState()
+    }
+
+    fun setBreitemaPlaying(playing: Boolean) {
+        audioBridge.setBreitemaPlaying(playing)
+        updateBreitemaState()
+    }
+
+    fun setBreitemaRhythmMode(mode: Int) {
+        audioBridge.setBreitemaRhythmMode(mode)
+        updateBreitemaState()
+    }
+
+    fun regenerateBreitemaPattern() {
+        audioBridge.generateBreitemaPattern()
+        updateBreitemaState()
+    }
+
+    fun updateBreitemaState() {
+        _breitemaState.value = audioBridge.getBreitemaData()
+    }
+
     override fun onCleared() {
         super.onCleared()
         audioBridge.stop()

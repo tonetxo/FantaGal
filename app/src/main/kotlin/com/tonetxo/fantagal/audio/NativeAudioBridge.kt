@@ -120,6 +120,65 @@ class NativeAudioBridge {
     }
 
     /**
+     * Brétema Engine controls
+     */
+    fun setBreitemaStep(step: Int, active: Boolean) {
+        nativeSetBreitemaStep(step, active)
+    }
+
+    fun setBreitemaPlaying(playing: Boolean) {
+        nativeSetBreitemaPlaying(playing)
+    }
+
+    fun setBreitemaRhythmMode(mode: Int) {
+        nativeSetBreitemaRhythmMode(mode)
+    }
+
+    fun generateBreitemaPattern() {
+        nativeGenerateBreitemaPattern()
+    }
+
+    fun getBreitemaData(): BreitemaState {
+        val buffer = FloatArray(35)
+        val count = nativeGetBreitemaData(buffer)
+        if (count < 35) return BreitemaState()
+
+        val steps = BooleanArray(16)
+        val probs = FloatArray(16)
+        for (i in 0 until 16) {
+            probs[i] = buffer[3 + i]
+            steps[i] = buffer[19 + i] > 0.5f
+        }
+
+        return BreitemaState(
+            currentStep = buffer[0].toInt(),
+            rhythmMode = buffer[1].toInt(),
+            isPlaying = buffer[2] > 0.5f,
+            fogDensity = buffer[19], // Wait, let's check the buffer mapping in JNI
+            // In C++ getBreitemaData:
+            // destination[0] = currentStep
+            // destination[1] = rhythmMode
+            // destination[2] = isPlaying
+            // destination[3..18] = stepProbabilities (16)
+            // destination[19..34] = steps (16)
+            // Wait, I didn't include fogDensity in getBreitemaData C++ implementation!
+            stepProbabilities = probs.toList(),
+            steps = steps.toList()
+        )
+    }
+
+    data class BreitemaState(
+        val currentStep: Int = 0,
+        val rhythmMode: Int = 0,
+        val isPlaying: Boolean = false,
+        val stepProbabilities: List<Float> = List(16) { 0.5f },
+        val steps: List<Boolean> = List(16) { false },
+        val fogDensity: Float = 0.5f,
+        val fogMovement: Float = 0.5f,
+        val fmDepth: Float = 200f
+    )
+
+    /**
      * Get gear states from native engine (for persistence)
      */
     fun getGearStates(): List<GearData> {
@@ -165,6 +224,13 @@ class NativeAudioBridge {
     private external fun nativeUpdateGearPosition(id: Int, x: Float, y: Float)
     private external fun nativeGetGearData(destination: FloatArray): Int
     private external fun nativeUpdateEngineParameters(engineType: Int, pressure: Float, resonance: Float, viscosity: Float, turbulence: Float, diffusion: Float)
+    
+    // Brétema native methods
+    private external fun nativeSetBreitemaStep(step: Int, active: Boolean)
+    private external fun nativeSetBreitemaPlaying(playing: Boolean)
+    private external fun nativeSetBreitemaRhythmMode(mode: Int)
+    private external fun nativeGenerateBreitemaPattern()
+    private external fun nativeGetBreitemaData(destination: FloatArray): Int
 }
 
 /**

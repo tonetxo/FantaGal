@@ -20,6 +20,7 @@ set(AUDIO_SOURCES
     NativeAudioEngine.cpp
     engines/CriosferaEngine.cpp
     engines/GearheartEngine.cpp
+    engines/BreitemaEngine.cpp
     jni/native-lib.cpp
 )
 

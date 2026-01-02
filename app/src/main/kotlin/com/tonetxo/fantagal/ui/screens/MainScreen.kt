@@ -26,6 +26,7 @@ fun MainScreen(
         when (currentEngine) {
             SynthEngine.CRIOSFERA -> CriosferaScreen(viewModel = viewModel)
             SynthEngine.GEARHEART -> GearheartScreen(viewModel = viewModel)
+            SynthEngine.BREITEMA -> BreitemaScreen(viewModel = viewModel)
             else -> {
                 // Placeholder/Fallback to Criosfera
                 CriosferaScreen(viewModel = viewModel)

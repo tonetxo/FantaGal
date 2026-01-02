@@ -97,6 +97,17 @@ public:
    */
   void setSelectedEngine(int engineType);
 
+  /**
+   * Brétema Engine controls
+   */
+  void setBreitemaStep(int32_t step, bool active);
+  void setBreitemaPlaying(bool playing);
+  void setBreitemaRhythmMode(int32_t mode);
+  void generateBreitemaPattern();
+  // Returns [currentStep, rhythmMode, isPlaying, step0_prob, ..., step15_prob,
+  // step0_active, ..., step15_active] Total: 3 + 16 + 16 = 35 floats
+  int32_t getBreitemaData(float *destination, int32_t capacity);
+
   // Oboe callback
   oboe::DataCallbackResult onAudioReady(oboe::AudioStream *audioStream,
                                         void *audioData,

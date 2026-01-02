@@ -1,4 +1,5 @@
 #include "NativeAudioEngine.h"
+#include "engines/BreitemaEngine.h"
 #include "engines/CriosferaEngine.h"
 #include "engines/GearheartEngine.h"
 #include <algorithm>
@@ -25,12 +26,12 @@ NativeAudioEngine::~NativeAudioEngine() { stop(); }
 void NativeAudioEngine::initializeEngines() {
   engines_[ENGINE_CRIOSFERA] = std::make_unique<CriosferaEngine>();
   engines_[ENGINE_GEARHEART] = std::make_unique<GearheartEngine>();
+  engines_[ENGINE_BREITEMA] = std::make_unique<BreitemaEngine>();
   // Future engines will be initialized here when implemented:
   // engines_[ENGINE_ECHO_VESSEL] = std::make_unique<EchoVesselEngine>();
   // engines_[ENGINE_VOCODER] = std::make_unique<VocoderEngine>();
-  // engines_[ENGINE_BREITEMA] = std::make_unique<BreitemaEngine>();
 
-  LOGI("Initialized %d engines (Criosfera, Gearheart)", 2);
+  LOGI("Initialized %d engines (Criosfera, Gearheart, Breitema)", 3);
 }
 
 bool NativeAudioEngine::start() {
@@ -186,6 +187,74 @@ int32_t NativeAudioEngine::getGearData(float *destination, int32_t capacity) {
     count++;
   }
   return count;
+}
+
+void NativeAudioEngine::setBreitemaStep(int32_t step, bool active) {
+  std::lock_guard<std::mutex> lock(engineMutex_);
+  if (engines_[ENGINE_BREITEMA]) {
+    auto *breitema =
+        static_cast<BreitemaEngine *>(engines_[ENGINE_BREITEMA].get());
+    breitema->toggleStep(step);
+  }
+}
+
+void NativeAudioEngine::setBreitemaPlaying(bool playing) {
+  std::lock_guard<std::mutex> lock(engineMutex_);
+  if (engines_[ENGINE_BREITEMA]) {
+    auto *breitema =
+        static_cast<BreitemaEngine *>(engines_[ENGINE_BREITEMA].get());
+    breitema->setPlaying(playing);
+  }
+}
+
+void NativeAudioEngine::setBreitemaRhythmMode(int32_t mode) {
+  std::lock_guard<std::mutex> lock(engineMutex_);
+  if (engines_[ENGINE_BREITEMA]) {
+    auto *breitema =
+        static_cast<BreitemaEngine *>(engines_[ENGINE_BREITEMA].get());
+    breitema->setRhythmMode(mode);
+  }
+}
+
+void NativeAudioEngine::generateBreitemaPattern() {
+  std::lock_guard<std::mutex> lock(engineMutex_);
+  if (engines_[ENGINE_BREITEMA]) {
+    auto *breitema =
+        static_cast<BreitemaEngine *>(engines_[ENGINE_BREITEMA].get());
+    breitema->generateRandomPattern();
+  }
+}
+
+int32_t NativeAudioEngine::getBreitemaData(float *destination,
+                                           int32_t capacity) {
+  std::lock_guard<std::mutex> lock(engineMutex_);
+  if (!engines_[ENGINE_BREITEMA] || capacity < 35)
+    return 0;
+
+  auto *breitema =
+      static_cast<BreitemaEngine *>(engines_[ENGINE_BREITEMA].get());
+  auto state = breitema->getBreitemaState();
+
+  destination[0] = (float)state.currentStep;
+  destination[1] = (float)state.rhythmMode;
+  destination[2] = state.isPlaying ? 1.0f : 0.0f;
+
+  for (int i = 0; i < 16; ++i) {
+    destination[3 + i] = state.stepProbabilities[i];
+  }
+  for (int i = 0; i < 16; ++i) {
+    destination[19 + i] = state.steps[i] ? 1.0f : 0.0f;
+  }
+
+  // Add extra parameters for UI visuals
+  if (capacity >= 38) {
+    destination[35] = state.fogDensity;
+    destination[36] = state.fogMovement;
+    destination[37] = state.fmDepth;
+    return 38;
+  }
+
+  return 35;
 }
 
 void NativeAudioEngine::updateParameters(float pressure, float resonance,

@@ -133,4 +133,42 @@ Java_com_tonetxo_fantagal_audio_NativeAudioBridge_nativeUpdateEngineParameters(
       engineType, pressure, resonance, viscosity, turbulence, diffusion);
 }
 
+// Brétema Engine JNI
+JNIEXPORT void JNICALL
+Java_com_tonetxo_fantagal_audio_NativeAudioBridge_nativeSetBreitemaStep(
+    JNIEnv *env, jobject thiz, jint step, jboolean active) {
+  NativeAudioEngine::getInstance().setBreitemaStep(step, active);
+}
+
+JNIEXPORT void JNICALL
+Java_com_tonetxo_fantagal_audio_NativeAudioBridge_nativeSetBreitemaPlaying(
+    JNIEnv *env, jobject thiz, jboolean playing) {
+  NativeAudioEngine::getInstance().setBreitemaPlaying(playing);
+}
+
+JNIEXPORT void JNICALL
+Java_com_tonetxo_fantagal_audio_NativeAudioBridge_nativeSetBreitemaRhythmMode(
+    JNIEnv *env, jobject thiz, jint mode) {
+  NativeAudioEngine::getInstance().setBreitemaRhythmMode(mode);
+}
+
+JNIEXPORT void JNICALL
+Java_com_tonetxo_fantagal_audio_NativeAudioBridge_nativeGenerateBreitemaPattern(
+    JNIEnv *env, jobject thiz) {
+  NativeAudioEngine::getInstance().generateBreitemaPattern();
+}
+
+JNIEXPORT jint JNICALL
+Java_com_tonetxo_fantagal_audio_NativeAudioBridge_nativeGetBreitemaData(
+    JNIEnv *env, jobject thiz, jfloatArray destination) {
+  jfloat *destPtr = env->GetFloatArrayElements(destination, nullptr);
+  jsize capacity = env->GetArrayLength(destination);
+
+  int count =
+      NativeAudioEngine::getInstance().getBreitemaData(destPtr, capacity);
+
+  env->ReleaseFloatArrayElements(destination, destPtr, 0);
+  return count;
+}
+
 } // extern "C"
