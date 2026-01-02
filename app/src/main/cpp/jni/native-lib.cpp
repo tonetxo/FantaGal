@@ -171,4 +171,15 @@ Java_com_tonetxo_fantagal_audio_NativeAudioBridge_nativeGetBreitemaData(
   return count;
 }
 
+JNIEXPORT void JNICALL
+Java_com_tonetxo_fantagal_audio_NativeAudioBridge_nativeSetVocoderModulator(
+    JNIEnv *env, jobject thiz, jfloatArray data) {
+  jfloat *body = env->GetFloatArrayElements(data, nullptr);
+  jsize len = env->GetArrayLength(data);
+
+  NativeAudioEngine::getInstance().setVocoderModulator(body, len);
+
+  env->ReleaseFloatArrayElements(data, body, JNI_ABORT);
+}
+
 } // extern "C"

@@ -14,6 +14,10 @@ class NativeAudioBridge {
     }
 
     // JNI methods
+    fun setVocoderModulator(data: FloatArray) {
+        nativeSetVocoderModulator(data)
+    }
+
     private external fun nativeInit()
     private external fun nativeStop()
     private external fun nativeSetEngineEnabled(engineType: Int, enabled: Boolean)
@@ -173,6 +177,13 @@ class NativeAudioBridge {
         val fmDepth: Float = 200f
     )
 
+    data class VocoderState(
+        val isRecording: Boolean = false,
+        val hasModulator: Boolean = false,
+        val modulatorLength: Int = 0,
+        val vuLevel: Float = 0f
+    )
+
     /**
      * Get gear states from native engine (for persistence)
      */
@@ -226,6 +237,8 @@ class NativeAudioBridge {
     private external fun nativeSetBreitemaRhythmMode(mode: Int)
     private external fun nativeGenerateBreitemaPattern()
     private external fun nativeGetBreitemaData(destination: FloatArray): Int
+
+    private external fun nativeSetVocoderModulator(data: FloatArray)
 }
 
 /**

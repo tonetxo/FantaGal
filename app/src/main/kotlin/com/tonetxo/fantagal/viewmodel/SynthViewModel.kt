@@ -2,9 +2,11 @@ package com.tonetxo.fantagal.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.media.MediaRecorder.AudioSource
 import com.tonetxo.fantagal.audio.NativeAudioBridge
 import com.tonetxo.fantagal.audio.SynthEngine
 import com.tonetxo.fantagal.audio.SynthState
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -217,6 +219,9 @@ class SynthViewModel : ViewModel() {
     private val _breitemaState = MutableStateFlow(NativeAudioBridge.BreitemaState())
     val breitemaState: StateFlow<NativeAudioBridge.BreitemaState> = _breitemaState.asStateFlow()
 
+    private val _vocoderState = MutableStateFlow(NativeAudioBridge.VocoderState())
+    val vocoderState: StateFlow<NativeAudioBridge.VocoderState> = _vocoderState.asStateFlow()
+
     fun toggleBreitemaStep(step: Int) {
         audioBridge.setBreitemaStep(step, true) // toggle logic is native
         updateBreitemaState()
@@ -239,6 +244,81 @@ class SynthViewModel : ViewModel() {
 
     fun updateBreitemaState() {
         _breitemaState.value = audioBridge.getBreitemaData()
+    }
+
+    fun toggleVocoderRecording() {
+        if (_vocoderState.value.isRecording) {
+            stopRecording()
+        } else {
+            startRecording()
+        }
+    }
+
+    private fun startRecording() {
+        _vocoderState.update { it.copy(isRecording = true) }
+        // We will implement actual recording in a coroutine on IO dispatcher
+        viewModelScope.launch(Dispatchers.IO) {
+            recordModulator()
+        }
+    }
+
+    private fun stopRecording() {
+        _vocoderState.update { it.copy(isRecording = false) }
+    }
+
+    private suspend fun recordModulator() {
+        val sampleRate = 48000
+        val bufferSizeSamples = sampleRate * 5 // 5 seconds max
+        val recordBuffer = FloatArray(bufferSizeSamples)
+        var totalRead = 0
+
+        val minBufferSize = android.media.AudioRecord.getMinBufferSize(
+            sampleRate,
+            android.media.AudioFormat.CHANNEL_IN_MONO,
+            android.media.AudioFormat.ENCODING_PCM_FLOAT
+        )
+
+        try {
+            val audioRecord = android.media.AudioRecord(
+                AudioSource.MIC,
+                sampleRate,
+                android.media.AudioFormat.CHANNEL_IN_MONO,
+                android.media.AudioFormat.ENCODING_PCM_FLOAT,
+                minBufferSize.coerceAtLeast(minBufferSize * 2)
+            )
+
+            if (audioRecord.state != android.media.AudioRecord.STATE_INITIALIZED) {
+                android.util.Log.e("Vocoder", "AudioRecord initialization failed")
+                _vocoderState.update { it.copy(isRecording = false) }
+                return
+            }
+            android.util.Log.i("Vocoder", "AudioRecord initialized, starting recording")
+
+            audioRecord.startRecording()
+            
+            val readBuffer = FloatArray(2048)
+            while (_vocoderState.value.isRecording && totalRead < bufferSizeSamples) {
+                val read = audioRecord.read(readBuffer, 0, readBuffer.size, android.media.AudioRecord.READ_BLOCKING)
+                if (read > 0) {
+                    val actualToCopy = minOf(read, bufferSizeSamples - totalRead)
+                    System.arraycopy(readBuffer, 0, recordBuffer, totalRead, actualToCopy)
+                    totalRead += actualToCopy
+                }
+            }
+
+            audioRecord.stop()
+            audioRecord.release()
+
+            if (totalRead > 0) {
+                val finalBuffer = recordBuffer.copyOfRange(0, totalRead)
+                audioBridge.setVocoderModulator(finalBuffer)
+                _vocoderState.update { it.copy(hasModulator = true, modulatorLength = totalRead) }
+            }
+        } catch (e: SecurityException) {
+            _vocoderState.update { it.copy(isRecording = false) }
+        } finally {
+            _vocoderState.update { it.copy(isRecording = false) }
+        }
     }
 
     override fun onCleared() {

@@ -108,6 +108,11 @@ public:
   // step0_active, ..., step15_active] Total: 3 + 16 + 16 = 35 floats
   int32_t getBreitemaData(float *destination, int32_t capacity);
 
+  /**
+   * Vocoder Engine controls
+   */
+  void setVocoderModulator(const float *data, int32_t numSamples);
+
   // Oboe callback
   oboe::DataCallbackResult onAudioReady(oboe::AudioStream *audioStream,
                                         void *audioData,

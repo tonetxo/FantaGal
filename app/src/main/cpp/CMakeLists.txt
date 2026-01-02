@@ -21,6 +21,8 @@ set(AUDIO_SOURCES
     engines/CriosferaEngine.cpp
     engines/GearheartEngine.cpp
     engines/BreitemaEngine.cpp
+    engines/VocoderProcessor.cpp
+    engines/VocoderEngine.cpp
     jni/native-lib.cpp
 )
 

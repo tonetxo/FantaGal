@@ -2,6 +2,7 @@
 #include "engines/BreitemaEngine.h"
 #include "engines/CriosferaEngine.h"
 #include "engines/GearheartEngine.h"
+#include "engines/VocoderEngine.h"
 #include <algorithm>
 #include <android/log.h>
 #include <cmath>
@@ -27,11 +28,11 @@ void NativeAudioEngine::initializeEngines() {
   engines_[ENGINE_CRIOSFERA] = std::make_unique<CriosferaEngine>();
   engines_[ENGINE_GEARHEART] = std::make_unique<GearheartEngine>();
   engines_[ENGINE_BREITEMA] = std::make_unique<BreitemaEngine>();
+  engines_[ENGINE_VOCODER] = std::make_unique<VocoderEngine>();
   // Future engines will be initialized here when implemented:
   // engines_[ENGINE_ECHO_VESSEL] = std::make_unique<EchoVesselEngine>();
-  // engines_[ENGINE_VOCODER] = std::make_unique<VocoderEngine>();
 
-  LOGI("Initialized %d engines (Criosfera, Gearheart, Breitema)", 3);
+  LOGI("Initialized %d engines (Criosfera, Gearheart, Breitema, Vocoder)", 4);
 }
 
 bool NativeAudioEngine::start() {
@@ -314,6 +315,16 @@ int32_t NativeAudioEngine::playNote(float frequency, float velocity) {
   return -1;
 }
 
+void NativeAudioEngine::setVocoderModulator(const float *data,
+                                            int32_t numSamples) {
+  std::lock_guard<std::mutex> lock(engineMutex_);
+  if (engines_[ENGINE_VOCODER]) {
+    auto *vocoder =
+        static_cast<VocoderEngine *>(engines_[ENGINE_VOCODER].get());
+    vocoder->setModulatorBuffer(data, numSamples);
+  }
+}
+
 void NativeAudioEngine::stopNote(int32_t noteId) {
   std::lock_guard<std::mutex> lock(engineMutex_);
 
@@ -344,18 +355,41 @@ NativeAudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
   {
     std::lock_guard<std::mutex> lock(engineMutex_);
 
-    for (int i = 0; i < ENGINE_COUNT; i++) {
-      if (engines_[i] && engineEnabled_[i]) {
-        // Clear mix buffer for this engine
-        std::memset(mixBuffer_.data(), 0, totalSamples * sizeof(float));
+    // Tapping logic for Vocoder: mix everything except vocoder first
+    std::vector<float> carrierBuffer(numFrames, 0.0f);
 
-        // Process engine
+    for (int i = 0; i < ENGINE_COUNT; i++) {
+      if (i == ENGINE_VOCODER)
+        continue;
+
+      if (engines_[i] && engineEnabled_[i]) {
+        std::memset(mixBuffer_.data(), 0, totalSamples * sizeof(float));
         engines_[i]->process(mixBuffer_.data(), numFrames);
 
-        // Add to output
-        for (int j = 0; j < totalSamples; j++) {
-          output[j] += mixBuffer_[j];
+        // Mix to final output AND to carrier buffer (mono for vocoder)
+        for (int j = 0; j < numFrames; j++) {
+          float left = mixBuffer_[j * 2];
+          float right = mixBuffer_[j * 2 + 1];
+          float monoMix = (left + right) * 0.5f;
+
+          carrierBuffer[j] += monoMix;
+          output[j * 2] += left;
+          output[j * 2 + 1] += right;
         }
+      }
+    }
+
+    // Now process Vocoder if enabled
+    if (engines_[ENGINE_VOCODER] && engineEnabled_[ENGINE_VOCODER]) {
+      auto *vocoder =
+          static_cast<VocoderEngine *>(engines_[ENGINE_VOCODER].get());
+      vocoder->setCarrierBuffer(carrierBuffer.data(), numFrames);
+
+      std::memset(mixBuffer_.data(), 0, totalSamples * sizeof(float));
+      vocoder->process(mixBuffer_.data(), numFrames);
+
+      for (int j = 0; j < totalSamples; j++) {
+        output[j] += mixBuffer_[j];
       }
     }
   }
