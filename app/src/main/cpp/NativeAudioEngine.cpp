@@ -154,6 +154,25 @@ void NativeAudioEngine::updateGear(int32_t id, float speed, bool isConnected,
     auto *gearheart =
         static_cast<GearheartEngine *>(engines_[ENGINE_GEARHEART].get());
     gearheart->updateGear(id, speed, isConnected, material, radius, depth);
+
+    // SYNC: If motor speed changes, update global pressure (tempo)
+    if (id == 0 && speed > 0.0001f) {
+      // Inverse Mapping: pressure = 0.5 * ((speed * 30 / PI) - 1)
+      float pi = TWO_PI / 2.0f;
+      float newPressure = 0.5f * ((speed * 30.0f / pi) - 1.0f);
+      newPressure = std::max(0.0f, std::min(1.0f, newPressure));
+
+      if (std::abs(currentState_.pressure - newPressure) > 0.001f) {
+        currentState_.pressure = newPressure;
+        // Propagate to all OTHER engines (especially Breitema)
+        for (int i = 0; i < ENGINE_COUNT; i++) {
+          if (engines_[i]) {
+            engines_[i]->updateParameters(currentState_);
+          }
+        }
+        LOGI("Gearheart sync: Speed %f -> Pressure %f", speed, newPressure);
+      }
+    }
   }
 }
 
@@ -284,6 +303,25 @@ void NativeAudioEngine::updateParameters(float pressure, float resonance,
   for (int i = 0; i < ENGINE_COUNT; i++) {
     if (engines_[i]) {
       engines_[i]->updateParameters(currentState_);
+    }
+  }
+
+  // SYNC: Update Gearheart motor speed based on pressure
+  if (engines_[ENGINE_GEARHEART]) {
+    auto *gearheart =
+        static_cast<GearheartEngine *>(engines_[ENGINE_GEARHEART].get());
+    const auto &gears = gearheart->getGearStates();
+
+    // Mapping: GearSpeed = (1 + 2 * pressure) * (PI / 30)
+    float pi = TWO_PI / 2.0f;
+    float newSpeed = (1.0f + 2.0f * pressure) * (pi / 30.0f);
+
+    // Only update if difference is significant to avoid unnecessary churn
+    if (std::abs(gears[0].speed - newSpeed) > 0.0001f) {
+      // Keep other gear properties same
+      gearheart->updateGear(0, newSpeed, gears[0].isConnected,
+                            gears[0].material, gears[0].radius, gears[0].depth);
+      LOGI("Pressure sync: Pressure %f -> GearSpeed %f", pressure, newSpeed);
     }
   }
 }
