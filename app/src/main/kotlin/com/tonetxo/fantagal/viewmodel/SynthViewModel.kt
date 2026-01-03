@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 /**
  * SynthViewModel - Main ViewModel for the synthesizer
@@ -49,6 +50,17 @@ class SynthViewModel : ViewModel() {
         // Start the audio engine
         viewModelScope.launch {
             audioBridge.start()
+        }
+
+        // Poll for vocoder VU level (only when active)
+        viewModelScope.launch {
+            while (true) {
+                if (isEngineActive(SynthEngine.VOCODER)) {
+                    val vu = audioBridge.getVocoderVU()
+                    _vocoderState.update { it.copy(vuLevel = vu) }
+                }
+                delay(50) // 20fps for VU meter
+            }
         }
     }
 
@@ -289,7 +301,7 @@ class SynthViewModel : ViewModel() {
 
             if (audioRecord.state != android.media.AudioRecord.STATE_INITIALIZED) {
                 android.util.Log.e("Vocoder", "AudioRecord initialization failed")
-                _vocoderState.update { it.copy(isRecording = false) }
+                _vocoderState.update { it.copy(isRecording = false, error = "Error: Micrófono non dispoñible") }
                 return
             }
             android.util.Log.i("Vocoder", "AudioRecord initialized, starting recording")
@@ -303,19 +315,43 @@ class SynthViewModel : ViewModel() {
                     val actualToCopy = minOf(read, bufferSizeSamples - totalRead)
                     System.arraycopy(readBuffer, 0, recordBuffer, totalRead, actualToCopy)
                     totalRead += actualToCopy
+
+                    // Calcular nivel VU en tempo real para feedback visual
+                    var sumSq = 0f
+                    for (i in 0 until read) {
+                        sumSq += readBuffer[i] * readBuffer[i]
+                    }
+                    val rms = kotlin.math.sqrt(sumSq / read)
+                    // Normalizar suavemente para a barra (pico arredor de 0.5-0.7 para fala normal)
+                    _vocoderState.update { it.copy(vuLevel = (rms * 5f).coerceIn(0f, 1f)) }
                 }
             }
+            
+            _vocoderState.update { it.copy(isRecording = false, vuLevel = 0f) }
 
             audioRecord.stop()
             audioRecord.release()
 
             if (totalRead > 0) {
+                // Normalización de pico para o modulador
                 val finalBuffer = recordBuffer.copyOfRange(0, totalRead)
+                var maxVal = 0.01f
+                for (v in finalBuffer) {
+                    val absV = kotlin.math.abs(v)
+                    if (absV > maxVal) maxVal = absV
+                }
+                if (maxVal < 0.9f) {
+                    val scale = 0.9f / maxVal
+                    for (i in finalBuffer.indices) {
+                        finalBuffer[i] *= scale
+                    }
+                }
+
                 audioBridge.setVocoderModulator(finalBuffer)
-                _vocoderState.update { it.copy(hasModulator = true, modulatorLength = totalRead) }
+                _vocoderState.update { it.copy(hasModulator = true, modulatorLength = totalRead, error = null) }
             }
         } catch (e: SecurityException) {
-            _vocoderState.update { it.copy(isRecording = false) }
+            _vocoderState.update { it.copy(isRecording = false, error = "Error: Permiso de micrófono denegado") }
         } finally {
             _vocoderState.update { it.copy(isRecording = false) }
         }

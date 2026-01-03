@@ -113,6 +113,9 @@ public:
    */
   void setVocoderModulator(const float *data, int32_t numSamples);
 
+  // Returns current modulator RMS level
+  float getVocoderVU();
+
   // Oboe callback
   oboe::DataCallbackResult onAudioReady(oboe::AudioStream *audioStream,
                                         void *audioData,

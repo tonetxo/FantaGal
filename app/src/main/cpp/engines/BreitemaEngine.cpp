@@ -6,7 +6,7 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-static constexpr float TWO_PI = 2.0f * (float)M_PI;
+// TWO_PI is now in DSPComponents.h (included via BreitemaEngine.h)
 
 BreitemaEngine::BreitemaEngine()
     : rng_(std::random_device{}()), dist_(0.0f, 1.0f) {
@@ -22,8 +22,10 @@ void BreitemaEngine::prepare(int32_t sampleRate, int32_t framesPerBuffer) {
   sampleRate_ = sampleRate;
   framesPerBuffer_ = framesPerBuffer;
 
-  reverbBuffer_.assign(sampleRate * 2, 0.0f);
-  reverbWriteIndex_ = 0;
+  // Initialize reverb with 2 second max time
+  reverb_.prepare(static_cast<float>(sampleRate), 2.0f);
+  reverb_.setParameters(120.0f, 0.5f,
+                        0.3f); // 120ms predelay, 0.5 feedback, 0.3 wet
 
   reset();
 }
@@ -61,18 +63,12 @@ void BreitemaEngine::process(float *output, int32_t numFrames) {
       }
     }
 
-    // Simple reverb
-    int reverbDelay = static_cast<int>(sampleRate_ * 0.12f);
-    int readIndex = (reverbWriteIndex_ - reverbDelay + reverbBuffer_.size()) %
-                    reverbBuffer_.size();
-    float reverbSample = reverbBuffer_[readIndex];
-
+    // Update reverb parameters based on resonance
     float feedback = 0.5f + currentState_.resonance * 0.3f;
-    reverbBuffer_[reverbWriteIndex_] = mix * 0.4f + reverbSample * feedback;
-    reverbWriteIndex_ = (reverbWriteIndex_ + 1) % reverbBuffer_.size();
+    reverb_.setParameters(120.0f, feedback, reverbMix_);
 
-    float finalMix =
-        mix * (1.1f - reverbMix_ * 0.5f) + reverbSample * reverbMix_;
+    // Process through reverb
+    float finalMix = reverb_.process(mix);
 
     // Soft clip
     finalMix = std::tanh(finalMix * 0.8f);

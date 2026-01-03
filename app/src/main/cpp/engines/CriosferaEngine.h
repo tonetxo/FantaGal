@@ -2,6 +2,7 @@
 #define CRIOSFERA_ENGINE_H
 
 #include "../BaseSynthEngine.h"
+#include "DSPComponents.h"
 #include <cmath>
 #include <random>
 #include <vector>
@@ -30,7 +31,7 @@ public:
 
 private:
   static constexpr int MAX_VOICES = 8;
-  static constexpr float TWO_PI = 6.28318530718f;
+  // TWO_PI is now in DSPComponents.h
   static constexpr int MAX_DELAY_SAMPLES = 192000; // 4s at 48kHz
 
   // Voice with noise-based synthesis
@@ -103,7 +104,7 @@ private:
   float getLfoValue(); // Sawtooth LFO like original
   float processVoice(Voice &voice);
   float resonantFilter(float input, float freq, float q, float *state);
-  float bandpassFilter(float input, float freq, float q, float *state);
+  // bandpassFilter removed - unused
   float lowpassFilter(float input, float freq, float *state);
   void processEnvelope(Voice &voice);
   float softClip(float x);

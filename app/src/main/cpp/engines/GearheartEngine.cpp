@@ -30,11 +30,10 @@ void GearheartEngine::prepare(int32_t sampleRate, int32_t framesPerBuffer) {
   sampleRate_ = sampleRate;
   framesPerBuffer_ = framesPerBuffer;
 
-  // Reverb buffer (2s)
-  int reverbSize = sampleRate * 2;
-  reverbBuffer_.resize(reverbSize, 0.0f);
-  std::fill(reverbBuffer_.begin(), reverbBuffer_.end(), 0.0f);
-  reverbWriteIndex_ = 0;
+  // Initialize reverb with 2 second max time
+  reverb_.prepare(static_cast<float>(sampleRate), 2.0f);
+  reverb_.setParameters(100.0f, 0.5f,
+                        0.3f); // 100ms predelay, 0.5 feedback, 0.3 wet
 }
 
 void GearheartEngine::updateParameters(const SynthState &state) {
@@ -120,21 +119,13 @@ void GearheartEngine::process(float *output, int32_t numFrames) {
       }
     }
 
-    // 3. Effects (Simple Reverb)
-    int reverbDelay =
-        static_cast<int>(sampleRate_ * 0.1f); // 100ms pre-delay/room
-    int readIndex = (reverbWriteIndex_ - reverbDelay + reverbBuffer_.size()) %
-                    reverbBuffer_.size();
-    float reverbSample = reverbBuffer_[readIndex];
-
-    // Simple dampening reverb
-    // Feed = 0.5 + resonance scaling
+    // Update reverb parameters based on resonance
     float feedback = 0.4f + resonance_ * 0.45f;
-    reverbBuffer_[reverbWriteIndex_] = mix * 0.3f + reverbSample * feedback;
-    reverbWriteIndex_ = (reverbWriteIndex_ + 1) % reverbBuffer_.size();
+    float wetMix = resonance_ * 0.45f;
+    reverb_.setParameters(100.0f, feedback, wetMix);
 
-    // Reverb Mix - scaled conservatively to prevent clipping
-    float finalMix = mix + reverbSample * (resonance_ * 0.45f);
+    // Process through reverb and soft clip
+    float finalMix = reverb_.process(mix);
     finalMix = softClip(finalMix * masterGain_);
 
     output[frame * 2] = finalMix;
@@ -373,15 +364,13 @@ float GearheartEngine::highpass(float input, float freq, float *state) {
 
 float GearheartEngine::bandpass(float input, float freq, float q,
                                 float *state) {
-  // SVF or Biquad? Using simplified 2-pole for now or just HP+LP
-  // Let's use HP + LP for simplicity inside struct state size
+  // Proper bandpass using HP->LP chain
+  // state[0-1]: highpass state, state[2-3]: lowpass state
   float hp = highpass(input, freq * 0.7f, &state[0]);
-  // Note: state has only 2 floats. HP uses both [0] output [1] input prev
-  // We need more state for BP if we do proper one.
-  // Hack: Reuse global or just use simple approximation?
-  // Let's use the Criosfera bandpass logic adjusted
-  // Or just simple noise burst for snare
-  return hp; // Placeholder, snare noise is noisy anyway
+  float lp = lowpass(hp, freq * 1.4f, &state[2]);
+  // Apply Q as resonance boost (clamped for stability)
+  float qBoost = std::min(q, 4.0f);
+  return lp * qBoost;
 }
 
 float GearheartEngine::generateNoise() { return noiseDist_(rng_); }
@@ -398,5 +387,5 @@ int32_t GearheartEngine::playNote(float frequency, float velocity) {
 void GearheartEngine::reset() {
   for (auto &v : voices_)
     v.active = false;
-  std::fill(reverbBuffer_.begin(), reverbBuffer_.end(), 0.0f);
+  reverb_.reset();
 }

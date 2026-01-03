@@ -12,7 +12,11 @@ void VocoderEngine::prepare(int32_t sampleRate, int32_t framesPerBuffer) {
   framesPerBuffer_ = framesPerBuffer;
   processor_ =
       std::make_unique<VocoderProcessor>(static_cast<float>(sampleRate));
+
+  // Pre-allocate all buffers
   carrierBuffer_.resize(framesPerBuffer, 0.0f);
+  modChunk_.resize(framesPerBuffer, 0.0f);
+  vocOutput_.resize(framesPerBuffer, 0.0f);
 }
 
 void VocoderEngine::process(float *output, int32_t numFrames) {
@@ -20,42 +24,52 @@ void VocoderEngine::process(float *output, int32_t numFrames) {
 
   bool hasModulator = !modulatorBuffer_.empty();
 
-  // Ensure carrier buffer size
-  if (carrierBuffer_.size() < static_cast<size_t>(numFrames)) {
+  // Ensure buffer sizes (check modChunk_ since carrierBuffer_ might be resized
+  // separately)
+  if (modChunk_.size() < static_cast<size_t>(numFrames)) {
     carrierBuffer_.resize(numFrames, 0.0f);
+    modChunk_.resize(numFrames, 0.0f);
+    vocOutput_.resize(numFrames, 0.0f);
   }
 
+  // Clear modChunk and vocOutput before use
+  std::fill(modChunk_.begin(), modChunk_.begin() + numFrames, 0.0f);
+  std::fill(vocOutput_.begin(), vocOutput_.begin() + numFrames, 0.0f);
+
   // Prepare mono modulator chunk
-  std::vector<float> modChunk(numFrames, 0.0f);
   if (hasModulator) {
     for (int i = 0; i < numFrames; i++) {
-      modChunk[i] = modulatorBuffer_[modulatorReadIndex_];
+      modChunk_[i] = modulatorBuffer_[modulatorReadIndex_];
       modulatorReadIndex_ = (modulatorReadIndex_ + 1) % modulatorBuffer_.size();
     }
   }
 
   // Process through vocoder (mono output)
-  std::vector<float> vocOutput(numFrames, 0.0f);
-  processor_->process(modChunk.data(), carrierBuffer_.data(), vocOutput.data(),
-                      numFrames);
+  processor_->process(modChunk_.data(), carrierBuffer_.data(),
+                      vocOutput_.data(), numFrames);
 
   // Interleave to stereo output
   for (int i = 0; i < numFrames; i++) {
-    float sample = vocOutput[i] * masterGain_;
+    float sample = vocOutput_[i] * masterGain_;
     output[i * 2] = sample;
     output[i * 2 + 1] = sample;
   }
 
   // Clear carrier buffer after use to avoid "ghost" carriers if engines stop
-  std::fill(carrierBuffer_.begin(), carrierBuffer_.end(), 0.0f);
+  std::fill(carrierBuffer_.begin(), carrierBuffer_.begin() + numFrames, 0.0f);
 }
 
 void VocoderEngine::updateParameters(const SynthState &state) {
   std::lock_guard<std::mutex> lock(stateMutex_);
   currentState_ = state;
 
-  // Presión = Intensity / Gain (Mapecado directo e potente)
-  masterGain_ = 0.5f + state.pressure * 6.5f;
+  // Presión = Intensity / Gain (ranxo reducido para evitar distorsión)
+  // Rango anterior: 0.5-7.0 (causaba distorsión)
+  // Rango novo: 0.5-3.0 (máis controlado)
+  static constexpr float MIN_MASTER_GAIN = 0.5f;
+  static constexpr float MAX_MASTER_GAIN = 3.0f;
+  masterGain_ =
+      MIN_MASTER_GAIN + state.pressure * (MAX_MASTER_GAIN - MIN_MASTER_GAIN);
   processor_->setIntensity(state.pressure);
 
   // Resonancia = Q das bandas
@@ -97,4 +111,11 @@ void VocoderEngine::setCarrierBuffer(const float *data, int32_t numFrames) {
     carrierBuffer_.resize(numFrames);
   }
   std::copy(data, data + numFrames, carrierBuffer_.begin());
+}
+
+float VocoderEngine::getVULevel() {
+  std::lock_guard<std::mutex> lock(stateMutex_);
+  if (!processor_)
+    return 0.0f;
+  return processor_->getModulatorRMS();
 }

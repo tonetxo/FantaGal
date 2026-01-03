@@ -181,7 +181,8 @@ class NativeAudioBridge {
         val isRecording: Boolean = false,
         val hasModulator: Boolean = false,
         val modulatorLength: Int = 0,
-        val vuLevel: Float = 0f
+        val vuLevel: Float = 0f,
+        val error: String? = null // Error message for user feedback
     )
 
     /**
@@ -239,6 +240,9 @@ class NativeAudioBridge {
     private external fun nativeGetBreitemaData(destination: FloatArray): Int
 
     private external fun nativeSetVocoderModulator(data: FloatArray)
+    private external fun nativeGetVocoderVU(): Float
+
+    fun getVocoderVU(): Float = nativeGetVocoderVU()
 }
 
 /**

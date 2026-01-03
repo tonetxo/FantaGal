@@ -2,6 +2,7 @@
 #define GEARHEART_ENGINE_H
 
 #include "../BaseSynthEngine.h"
+#include "DSPComponents.h"
 #include <array>
 #include <cmath>
 #include <map>
@@ -25,8 +26,8 @@ struct GearVoice {
   float envDecay = 0.0f;
   float envTime = 0.0f;
 
-  // Noise
-  float noiseFilterState[2] = {0.0f, 0.0f};
+  // Noise filter state (4 floats: 2 for HP, 2 for LP in bandpass)
+  float noiseFilterState[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 
   // Volume/Velocity
   float gain = 1.0f;
@@ -77,7 +78,7 @@ public:
 
 private:
   static constexpr int MAX_VOICES = 16;
-  static constexpr float TWO_PI = 6.28318530718f;
+  // TWO_PI is now in DSPComponents.h
 
   std::vector<GearVoice> voices_;
   std::map<int32_t, AudioGear> gears_;
@@ -91,9 +92,8 @@ private:
   float turbulence_ = 0.5f;
   float diffusion_ = 0.5f;
 
-  // Reverb
-  std::vector<float> reverbBuffer_;
-  int reverbWriteIndex_ = 0;
+  // Reverb using DSPComponents
+  SimpleReverb reverb_;
 
   // Generators
   std::mt19937 rng_;

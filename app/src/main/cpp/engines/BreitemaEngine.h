@@ -1,6 +1,7 @@
 #pragma once
 
 #include "BaseSynthEngine.h"
+#include "DSPComponents.h"
 #include <atomic>
 #include <mutex>
 #include <random>
@@ -83,7 +84,6 @@ private:
   const float SCALE_NOTES[8] = {110.00f, 123.47f, 130.81f, 146.83f,
                                 164.81f, 174.61f, 196.00f, 220.00f};
 
-  // Reverb simple
-  std::vector<float> reverbBuffer_;
-  size_t reverbWriteIndex_ = 0;
+  // Reverb using DSPComponents
+  SimpleReverb reverb_;
 };

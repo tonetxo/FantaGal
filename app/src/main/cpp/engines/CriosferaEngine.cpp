@@ -99,17 +99,7 @@ float CriosferaEngine::resonantFilter(float input, float freq, float q,
   return state[0];
 }
 
-// Simple bandpass using two one-pole filters
-float CriosferaEngine::bandpassFilter(float input, float freq, float q,
-                                      float *state) {
-  if (sampleRate_ <= 0)
-    return input;
-
-  // Highpass then lowpass for simple bandpass
-  float hp = input - lowpassFilter(input, freq * 0.5f, &state[0]);
-  float bp = lowpassFilter(hp, freq * 2.0f, &state[1]);
-  return bp * 2.0f; // Boost
-}
+// bandpassFilter removed - was never called
 
 float CriosferaEngine::processVoice(Voice &voice) {
   if (!voice.active)

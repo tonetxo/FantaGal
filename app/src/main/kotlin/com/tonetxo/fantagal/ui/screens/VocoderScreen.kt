@@ -125,6 +125,9 @@ fun VocoderScreen(
                     fontSize = 14.sp
                 )
                 
+                //VU Meter
+                VUMeter(level = vocoderState.vuLevel, modifier = Modifier.padding(horizontal = 32.dp))
+                
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Box(
@@ -152,9 +155,49 @@ fun VocoderScreen(
                         modifier = Modifier.padding(top = 8.dp)
                     )
                 }
+                
+                // Error display
+                vocoderState.error?.let { error ->
+                    Text(
+                        text = error,
+                        color = Color.Red,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(100.dp)) // Piano spacing
+        }
+    }
+}
+
+@Composable
+fun VUMeter(level: Float, modifier: Modifier = Modifier) {
+    val animatedLevel by animateFloatAsState(
+        targetValue = level.coerceIn(0f, 1f),
+        animationSpec = spring(stiffness = Spring.StiffnessLow),
+        label = "VU Level"
+    )
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(8.dp)
+                .background(Color.Black.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(animatedLevel)
+                    .fillMaxHeight()
+                    .background(
+                        brush = androidx.compose.ui.graphics.Brush.horizontalGradient(
+                            colors = listOf(VocoderGreen.copy(alpha = 0.5f), VocoderGreen)
+                        ),
+                        shape = RoundedCornerShape(4.dp)
+                    )
+            )
         }
     }
 }

@@ -175,11 +175,21 @@ JNIEXPORT void JNICALL
 Java_com_tonetxo_fantagal_audio_NativeAudioBridge_nativeSetVocoderModulator(
     JNIEnv *env, jobject thiz, jfloatArray data) {
   jfloat *body = env->GetFloatArrayElements(data, nullptr);
+  if (body == nullptr) {
+    LOGI("Failed to get float array elements for vocoder modulator");
+    return;
+  }
   jsize len = env->GetArrayLength(data);
 
   NativeAudioEngine::getInstance().setVocoderModulator(body, len);
 
   env->ReleaseFloatArrayElements(data, body, JNI_ABORT);
+}
+
+JNIEXPORT jfloat JNICALL
+Java_com_tonetxo_fantagal_audio_NativeAudioBridge_nativeGetVocoderVU(
+    JNIEnv *env, jobject thiz) {
+  return NativeAudioEngine::getInstance().getVocoderVU();
 }
 
 } // extern "C"

@@ -315,7 +315,7 @@ fun BreitemaFogVisuals(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween((6000 / (movement + 0.15f)).toInt(), easing = LinearEasing),
+            animation = tween((6000 / (movement + 0.15f)).toInt().coerceIn(100, 60000), easing = LinearEasing),
             repeatMode = RepeatMode.Reverse
         )
     )
@@ -324,7 +324,7 @@ fun BreitemaFogVisuals(
         initialValue = 0f,
         targetValue = 360f,
         animationSpec = infiniteRepeatable(
-            animation = tween((12000 / (movement + 0.15f)).toInt(), easing = LinearEasing),
+            animation = tween((12000 / (movement + 0.15f)).toInt().coerceIn(100, 120000), easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         )
     )
@@ -333,7 +333,7 @@ fun BreitemaFogVisuals(
         initialValue = 0.8f,
         targetValue = 1.2f,
         animationSpec = infiniteRepeatable(
-            animation = tween((2000 / (movement + 1f)).toInt(), easing = FastOutSlowInEasing),
+            animation = tween((2000 / (movement + 1f)).toInt().coerceIn(100, 20000), easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         )
     )

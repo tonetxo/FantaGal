@@ -24,6 +24,7 @@ public:
   // Vocoder specific methods
   void setModulatorBuffer(const float *data, int32_t numSamples);
   void setCarrierBuffer(const float *data, int32_t numFrames);
+  float getVULevel();
 
 private:
   float masterGain_ = 0.8f;
@@ -33,8 +34,11 @@ private:
   std::vector<float> modulatorBuffer_;
   int32_t modulatorReadIndex_ = 0;
 
-  // Temporary carrier buffer (filled by NativeAudioEngine)
+  // Temporary buffers for processing (pre-allocated to avoid audio thread
+  // allocation)
   std::vector<float> carrierBuffer_;
+  std::vector<float> modChunk_;
+  std::vector<float> vocOutput_;
 
   std::mutex stateMutex_;
 };

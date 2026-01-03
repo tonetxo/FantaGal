@@ -201,7 +201,8 @@ int32_t NativeAudioEngine::getGearData(float *destination, int32_t capacity) {
   return count;
 }
 
-void NativeAudioEngine::setBreitemaStep(int32_t step, bool active) {
+void NativeAudioEngine::setBreitemaStep(
+    int32_t step, bool /* active - ignored, always toggles */) {
   std::lock_guard<std::mutex> lock(engineMutex_);
   if (engines_[ENGINE_BREITEMA]) {
     auto *breitema =
@@ -334,6 +335,18 @@ void NativeAudioEngine::setVocoderModulator(const float *data,
         static_cast<VocoderEngine *>(engines_[ENGINE_VOCODER].get());
     vocoder->setModulatorBuffer(data, numSamples);
   }
+}
+
+float NativeAudioEngine::getVocoderVU() {
+  std::lock_guard<std::mutex> lock(engineMutex_);
+  if (engines_[ENGINE_VOCODER]) {
+    auto *vocoder =
+        static_cast<VocoderEngine *>(engines_[ENGINE_VOCODER].get());
+    float vu = vocoder->getVULevel();
+    // LOGI("Vocoder VU: %f", vu); // Uncomment for extreme debugging
+    return vu;
+  }
+  return 0.0f;
 }
 
 void NativeAudioEngine::stopNote(int32_t noteId) {
