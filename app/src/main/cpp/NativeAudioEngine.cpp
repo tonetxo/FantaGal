@@ -118,9 +118,17 @@ void NativeAudioEngine::setEngineEnabled(int engineType, bool enabled) {
   }
 
   std::lock_guard<std::mutex> lock(engineMutex_);
+
+  bool wasEnabled = engineEnabled_[engineType];
   engineEnabled_[engineType] = enabled;
-  // Note: We don't reset the engine on enable/disable to preserve state
-  // (e.g., gear rotation angles in Gearheart)
+
+  // CRITICAL FIX: Reset the engine when re-enabling to clear any corrupted
+  // state This fixes the issue where Criosfera stops producing sound after
+  // switching engines
+  if (enabled && !wasEnabled && engines_[engineType]) {
+    engines_[engineType]->reset();
+    LOGI("Engine %d reset on re-enable", engineType);
+  }
 
   LOGI("Engine %d %s", engineType, enabled ? "enabled" : "disabled");
 }

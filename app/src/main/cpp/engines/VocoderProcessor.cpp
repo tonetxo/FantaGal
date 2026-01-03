@@ -1,107 +1,97 @@
 #include "VocoderProcessor.h"
 #include <algorithm>
+#include <cmath>
 
 VocoderProcessor::VocoderProcessor(float sampleRate) : mSampleRate(sampleRate) {
   setupBands();
 
-  // Configurar HPF para o modulador (corte en 150Hz)
-  mModHPF.setCoefficients(150.0f, 0.707f, sampleRate);
+  // Filtro anti-acople (100Hz HPF) - igual que referencia
+  mModHPF.setCoefficients(100.0f, 0.707f, sampleRate);
 
-  // Inicializar smoothers
-  sIntensity.setTimeConstant(20.0f, sampleRate);
-  sIntensity.setTarget(1.0f);
-  sResonance = ParameterSmoother(12.0f); // Valor Q inicial seguro
-  sResonance.setTimeConstant(30.0f, sampleRate);
-  sNoiseThreshold.setTimeConstant(20.0f, sampleRate);
-  sMix.setTimeConstant(20.0f, sampleRate);
-  sDiffusion.setTimeConstant(20.0f, sampleRate);
+  // Inicializar smoothers con ~30ms como en referencia
+  float tc = 30.0f;
+  sIntensity.setTimeConstant(tc, sampleRate);
+  sIntensity.setTarget(1.5f);            // Valor inicial de referencia
+  sResonance = ParameterSmoother(18.0f); // Q=18 como referencia
+  sResonance.setTimeConstant(tc, sampleRate);
+  sNoiseThreshold.setTimeConstant(tc, sampleRate);
+  sNoiseThreshold.setTarget(0.012f); // Valor inicial de referencia
+  sMix.setTimeConstant(tc, sampleRate);
+  sDiffusion.setTimeConstant(tc, sampleRate);
 }
 
 void VocoderProcessor::setupBands() {
-  // Frecuencias base para as 16 bandas (escala logarítmica de 150Hz a 8kHz)
-  const float freqs[16] = {150,  220,  320,  440,  620,  850,  1150, 1500,
-                           2000, 2600, 3400, 4400, 5600, 6800, 8200, 10000};
+  // 20 bandas como en Aethereum (mismas frecuencias que referencia)
+  const float freqs[20] = {120,  180,  280,  380,   500,   650,  850,
+                           1100, 1450, 1800, 2200,  2700,  3400, 4200,
+                           5200, 6500, 8000, 10000, 13000, 16000};
 
-  for (int i = 0; i < 16; i++) {
-    float q = 12.0f; // Q inicial
-    mBands[i].modFilter.setCoefficients(freqs[i], q, mSampleRate);
-    mBands[i].carFilter.setCoefficients(freqs[i], q, mSampleRate);
+  // Q=18 como en referencia
+  constexpr float Q = 18.0f;
+
+  for (int i = 0; i < 20; i++) {
+    mBands[i].frequency = freqs[i];
+    mBands[i].modFilter.setCoefficients(freqs[i], Q, mSampleRate);
+    mBands[i].carFilter.setCoefficients(freqs[i], Q, mSampleRate);
     mBands[i].envelope = EnvelopeFollower(mSampleRate);
+    // EnvelopeFollower ya usa 2ms attack, 30ms release por defecto - perfecto
   }
 }
 
 void VocoderProcessor::process(const float *modulator, const float *carrier,
                                float *output, int numFrames) {
+  // Frecuencias para actualización de filtros
+  const float freqs[20] = {120,  180,  280,  380,   500,   650,  850,
+                           1100, 1450, 1800, 2200,  2700,  3400, 4200,
+                           5200, 6500, 8000, 10000, 13000, 16000};
+
   for (int frame = 0; frame < numFrames; frame++) {
     float intensity = sIntensity.process();
     float resonance = sResonance.process();
     float threshold = sNoiseThreshold.process();
+
     // Actualizar Q das bandas se cambiou a resonancia significativamente
-    if (std::abs(resonance - lastRes_) > 0.1f) {
-      const float freqs[16] = {150,  220,  320,  440,  620,  850,  1150, 1500,
-                               2000, 2600, 3400, 4400, 5600, 6800, 8200, 10000};
-      for (int i = 0; i < 16; i++) {
+    if (std::abs(resonance - lastRes_) > 0.5f) {
+      for (int i = 0; i < 20; i++) {
         mBands[i].modFilter.setCoefficients(freqs[i], resonance, mSampleRate);
         mBands[i].carFilter.setCoefficients(freqs[i], resonance, mSampleRate);
       }
       lastRes_ = resonance;
     }
 
-    // Modulador: Preamplificación forte (x25), saturación suave e filtrado
-    float modSample = modulator[frame] * 25.0f;
-    modSample =
-        fastTanh(modSample); // Saturación para mellor análise sen clipping duro
+    // Modulador: Preamplificación x16 como referencia
+    float modSample = modulator[frame] * 16.0f;
     modSample = mModHPF.process(modSample);
 
-    // Carrier
+    // Carrier (de otros motores)
     float carSample = carrier[frame];
 
     float mix = sMix.process();
-    float diffusion = sDiffusion.process();
-
-    // Actualizar release dos sobre se cambiou a difusión significativamente
-    if (std::abs(diffusion - lastDiff_) > 0.05f) {
-      // Mapeamos 0..1 a 20ms..500ms de release
-      float releaseMs = 20.0f + diffusion * 480.0f;
-      for (int i = 0; i < 16; i++) {
-        mBands[i].envelope.setRelease(releaseMs);
-      }
-      lastDiff_ = diffusion;
-    }
 
     float vocodeOutput = 0.0f;
 
-    // Vocoding por bandas
-    int bandIdx = 0;
+    // Vocoding: proceso igual que referencia
     for (auto &band : mBands) {
-      float modFiltered = band.modFilter.process(modSample);
-      float env = band.envelope.process(modFiltered);
+      float filteredMod = band.modFilter.process(modSample);
+      float envelope = band.envelope.process(filteredMod);
 
-      // Boost progresivo en agudos para claridade (sibilancia) - FORTE
-      float bandBoost =
-          1.0f + (static_cast<float>(bandIdx) / 15.0f) * 3.0f; // Was 1.5f
-
-      // Porta de ruído e aplicación do sobre ao carrier
-      if (env > threshold) {
-        float carFiltered = band.carFilter.process(carSample);
-        // Use envelope directly (more responsive to transients)
-        vocodeOutput += carFiltered * env * bandBoost;
+      // Porta de ruído igual que referencia: boost = (envelope - threshold *
+      // 0.5)
+      if (envelope > threshold) {
+        float filteredCar = band.carFilter.process(carSample);
+        float boost = (envelope - threshold * 0.5f);
+        vocodeOutput += filteredCar * boost * intensity;
       }
-      bandIdx++;
     }
 
-    // Mix final e ganancia master (compensación de bandas)
-    vocodeOutput *=
-        intensity * 4.0f; // Significant boost to match carrier levels
+    // Normalización base como referencia
+    vocodeOutput *= 0.7f;
 
-    // Suave limitación SOLO ao vocodeo procesado (antes de mix)
-    // No clipping here - we want the vocoder to be as loud as the carrier
-
-    // Blend con seco (Tormenta) - Crossfade real
+    // Blend con seco (Tormenta / Mix)
     // mix=0: sólo carrier. mix=1: sólo vocoder
     float finalOut = (vocodeOutput * mix) + (carSample * (1.0f - mix));
 
-    // Soft clip aí final
+    // Soft clip como referencia
     if (finalOut > 1.0f)
       finalOut = 1.0f;
     if (finalOut < -1.0f)
@@ -112,19 +102,19 @@ void VocoderProcessor::process(const float *modulator, const float *carrier,
 }
 
 void VocoderProcessor::setIntensity(float intensity) {
-  // Mapeo cuadrático: 0.5 a 8.0 (mellor control en baixos)
-  float val = 0.5f + (intensity * intensity) * 7.5f;
+  // Rango como referencia: 0.2 a 4.0
+  float val = 0.2f + intensity * 3.8f;
   sIntensity.setTarget(val);
 }
 
 void VocoderProcessor::setResonance(float resonance) {
-  // Mapeamos 0..1 a Q=3..30
-  sResonance.setTarget(3.0f + resonance * 27.0f);
+  // Q de 10 a 25 (18 por defecto en referencia)
+  sResonance.setTarget(10.0f + resonance * 15.0f);
 }
 
 void VocoderProcessor::setNoiseThreshold(float threshold) {
-  // Rango para evitar leaks: 0.005 a 0.15 (máis alto para reducir ruído)
-  sNoiseThreshold.setTarget(0.005f + threshold * 0.145f);
+  // Rango como referencia: 0.005 a 0.2
+  sNoiseThreshold.setTarget(0.005f + threshold * 0.195f);
 }
 
 void VocoderProcessor::setMix(float mix) {
@@ -132,5 +122,6 @@ void VocoderProcessor::setMix(float mix) {
 }
 
 void VocoderProcessor::setDiffusion(float diffusion) {
+  // En referencia esto controla echo, aquí lo dejamos para compatibilidad
   sDiffusion.setTarget(std::clamp(diffusion, 0.0f, 1.0f));
 }

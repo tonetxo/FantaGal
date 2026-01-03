@@ -5,8 +5,8 @@
 #include <vector>
 
 /**
- * VocoderProcessor - Recrea o motor de vocoding de 16 bandas de Aethereum.
- * Adaptado para usar un carrier externo (a mestura dos outros motores).
+ * VocoderProcessor - Vocoder de 20 bandas basado en Aethereum.
+ * Usa un carrier externo (a mestura dos outros motores).
  */
 class VocoderProcessor {
 public:
@@ -20,31 +20,31 @@ public:
   void setResonance(float resonance);      // Resonancia (Q do filtro)
   void setNoiseThreshold(float threshold); // Viscosidade (Gate)
   void setMix(float mix);                  // Tormenta (Wet/Dry)
-  void setDiffusion(float diffusion);      // Difusión (Release)
+  void setDiffusion(float diffusion);      // Difusión (for compatibility)
 
 private:
   float mSampleRate;
 
-  // 16 bandas de vocoding
+  // 20 bandas de vocoding (mesmo que Aethereum)
   struct Band {
     BandpassFilter modFilter; // Analizador
     BandpassFilter carFilter; // Sintetizador
     EnvelopeFollower envelope;
+    float frequency;
   };
 
-  std::array<Band, 16> mBands;
+  std::array<Band, 20> mBands;
   HighPassFilter mModHPF; // Para evitar realimentación e retumbos
 
   // Parameter smoothers
-  ParameterSmoother sIntensity{1.0f};
-  ParameterSmoother sResonance{5.0f};
-  ParameterSmoother sNoiseThreshold{0.01f};
+  ParameterSmoother sIntensity{1.5f};
+  ParameterSmoother sResonance{18.0f};
+  ParameterSmoother sNoiseThreshold{0.012f};
   ParameterSmoother sMix{0.5f};
-  ParameterSmoother sDiffusion{1.0f};
+  ParameterSmoother sDiffusion{0.5f};
 
   void setupBands();
 
-  // Tracking for parameter change optimization (moved from static in process())
+  // Tracking for parameter change optimization
   float lastRes_ = -1.0f;
-  float lastDiff_ = -1.0f;
 };

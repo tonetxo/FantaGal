@@ -56,26 +56,47 @@ float CriosferaEngine::lowpassFilter(float input, float freq, float *state) {
   return state[0];
 }
 
-// Resonant State Variable Filter (Chamberlin)
+// Helper to check for NaN/Inf and sanitize
+inline bool isValidSample(float x) { return std::isfinite(x); }
+
+inline float sanitizeSample(float x) {
+  if (!std::isfinite(x))
+    return 0.0f;
+  return std::clamp(x, -10.0f, 10.0f); // Prevent runaway values
+}
+
+// Resonant State Variable Filter (Chamberlin) with NaN protection
 float CriosferaEngine::resonantFilter(float input, float freq, float q,
                                       float *state) {
   if (sampleRate_ <= 0)
     return input;
 
+  // Sanitize input
+  input = sanitizeSample(input);
+
   // Ensure stable range
   float f = 2.0f * std::sin(3.14159f * freq / static_cast<float>(sampleRate_));
-  f = std::clamp(f, 0.0f, 1.4f); // Stability limit
-  float damping = 1.0f / std::max(0.1f, q);
+  f = std::clamp(f, 0.0f, 1.2f); // Reduced from 1.4f for extra stability
+  float damping =
+      1.0f / std::max(0.5f, q); // Min damping increased for stability
 
   // SVF Algorithm: state[0]=low, state[1]=band
   float low = state[0] + f * state[1];
   float high = input - low - damping * state[1];
   float band = f * high + state[1];
 
-  state[0] = low;
-  state[1] = band;
+  // CRITICAL: Check for NaN/Inf and reset state if corrupted
+  if (!isValidSample(low) || !isValidSample(band)) {
+    state[0] = 0.0f;
+    state[1] = 0.0f;
+    return 0.0f;
+  }
 
-  return low;
+  // Limit state values to prevent runaway
+  state[0] = std::clamp(low, -10.0f, 10.0f);
+  state[1] = std::clamp(band, -10.0f, 10.0f);
+
+  return state[0];
 }
 
 // Simple bandpass using two one-pole filters
@@ -156,6 +177,21 @@ void CriosferaEngine::processEnvelope(Voice &voice) {
 }
 
 void CriosferaEngine::process(float *output, int32_t numFrames) {
+  // CRITICAL: Check for corrupted state at start and auto-recover
+  if (!std::isfinite(smoothedCutoff_) || smoothedCutoff_ < 50.0f ||
+      smoothedCutoff_ > 20000.0f) {
+    smoothedCutoff_ = filterCutoff_; // Reset to current target
+  }
+
+  // Check filter state for corruption
+  for (int i = 0; i < 2; i++) {
+    for (int j = 0; j < 2; j++) {
+      if (!std::isfinite(globalFilterState_[i][j])) {
+        globalFilterState_[i][j] = 0.0f;
+      }
+    }
+  }
+
   for (int32_t frame = 0; frame < numFrames; ++frame) {
     float lfo = getLfoValue();
 
@@ -206,6 +242,14 @@ void CriosferaEngine::process(float *output, int32_t numFrames) {
     // Mix dry + delay + reverb (balanced to avoid saturation)
     float wetMix =
         filtered * 0.6f + delayedSample * 0.2f + reverbSample * reverbMix_;
+
+    // CRITICAL: Final NaN check before output
+    if (!std::isfinite(wetMix)) {
+      wetMix = 0.0f;
+      // Also reset filter states if we got here
+      memset(globalFilterState_, 0, sizeof(globalFilterState_));
+      smoothedCutoff_ = filterCutoff_;
+    }
 
     // Apply master gain and soft clip
     float finalSample = softClip(wetMix * masterGain_);
