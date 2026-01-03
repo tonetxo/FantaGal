@@ -47,4 +47,5 @@ private:
 
   // Tracking for parameter change optimization
   float lastRes_ = -1.0f;
+  float lastDiff_ = -1.0f;
 };

@@ -59,6 +59,17 @@ void VocoderProcessor::process(const float *modulator, const float *carrier,
       lastRes_ = resonance;
     }
 
+    // Actualizar release do envelope se cambiou a difusión
+    float diffusion = sDiffusion.process();
+    if (std::abs(diffusion - lastDiff_) > 0.02f) {
+      // 0 = 15ms (moi definido), 1 = 150ms (moi difuso)
+      float releaseMs = 15.0f + diffusion * 135.0f;
+      for (int i = 0; i < 20; i++) {
+        mBands[i].envelope.setRelease(releaseMs);
+      }
+      lastDiff_ = diffusion;
+    }
+
     // Modulador: Preamplificación x16 como referencia
     float modSample = modulator[frame] * 16.0f;
     modSample = mModHPF.process(modSample);
@@ -122,6 +133,6 @@ void VocoderProcessor::setMix(float mix) {
 }
 
 void VocoderProcessor::setDiffusion(float diffusion) {
-  // En referencia esto controla echo, aquí lo dejamos para compatibilidad
+  // Controla o release do envelope: 0=definido, 1=difuso
   sDiffusion.setTarget(std::clamp(diffusion, 0.0f, 1.0f));
 }

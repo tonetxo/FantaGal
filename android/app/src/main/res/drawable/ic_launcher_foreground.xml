@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- Círculo dorado central (representa la onda de sonido) -->
+    <path
+        android:fillColor="#CD7F32"
+        android:pathData="M54,54m-30,0a30,30 0,1 1,60 0a30,30 0,1 1,-60 0"/>
+    
+    <!-- Ondas de sonido -->
+    <path
+        android:fillColor="#FFD700"
+        android:strokeWidth="2"
+        android:pathData="M54,35 Q64,44 54,54 Q44,64 54,73"/>
+    
+    <!-- Micrófono estilizado -->
+    <path
+        android:fillColor="#8B5A2B"
+        android:pathData="M54,40 L54,50 M48,55 L60,55 M54,55 L54,65"/>
+        
+</vector>

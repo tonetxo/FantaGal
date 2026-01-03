@@ -1,0 +1,24 @@
+# Android Build
+build/
+.gradle/
+.cxx/
+capture/
+*.apk
+*.aar
+
+# Local configuration
+local.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+*.iws
+
+# Gradle
+.gradle/
+gradlew.bat
+gradle/wrapper/gradle-wrapper.jar
+
+# NDK
+obj/
+libs/
