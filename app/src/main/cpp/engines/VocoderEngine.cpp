@@ -63,13 +63,8 @@ void VocoderEngine::updateParameters(const SynthState &state) {
   std::lock_guard<std::mutex> lock(stateMutex_);
   currentState_ = state;
 
-  // Presión = Intensity / Gain (ranxo reducido para evitar distorsión)
-  // Rango anterior: 0.5-7.0 (causaba distorsión)
-  // Rango novo: 0.5-3.0 (máis controlado)
-  static constexpr float MIN_MASTER_GAIN = 0.5f;
-  static constexpr float MAX_MASTER_GAIN = 3.0f;
-  masterGain_ =
-      MIN_MASTER_GAIN + state.pressure * (MAX_MASTER_GAIN - MIN_MASTER_GAIN);
+  // No Vocoder, a Presión manéxase dentro do Processor para ser máis musical
+  masterGain_ = 1.0f;
   processor_->setIntensity(state.pressure);
 
   // Resonancia = Q das bandas

@@ -402,9 +402,12 @@ NativeAudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
         for (int j = 0; j < numFrames; j++) {
           float left = mixBuffer_[j * 2];
           float right = mixBuffer_[j * 2 + 1];
-          float monoMix = (left + right) * 0.5f;
 
-          vocoderCarrierBuffer_[j] += monoMix;
+          // USAR SÓ A CANLE ESQUERDA como portadora.
+          // Sumar (L+R)*0.5 causa cancelación de fase se o motor ten efectos de
+          // estereo, o que provoca que o vocoder soe "a susurro" ou sen
+          // afinación.
+          vocoderCarrierBuffer_[j] += left;
 
           // CRITICAL: Only add carriers to final output if Vocoder is DISABLED.
           // If Vocoder is enabled, the Tormenta (mix) parameter controls the
@@ -430,19 +433,20 @@ NativeAudioEngine::onAudioReady(oboe::AudioStream *audioStream, void *audioData,
         output[j] += mixBuffer_[j];
       }
     }
-  }
-  // Apply master gain and soft clip to prevent distortion
-  const float masterGain =
-      0.6f; // Reduce overall level when mixing multiple engines
-  for (int i = 0; i < totalSamples; i++) {
-    float x = output[i] * masterGain;
-    // Smooth tanh-like soft clip for natural saturation
-    if (x > 0.5f) {
-      x = 0.5f + 0.5f * std::tanh((x - 0.5f) * 2.0f);
-    } else if (x < -0.5f) {
-      x = -0.5f + 0.5f * std::tanh((x + 0.5f) * 2.0f);
+
+    // Apply master gain and soft clip to prevent distortion
+    const float masterGain =
+        0.6f; // Reduce overall level when mixing multiple engines
+    for (int i = 0; i < totalSamples; i++) {
+      float x = output[i] * masterGain;
+      // Smooth tanh-like soft clip for natural saturation
+      if (x > 0.5f) {
+        x = 0.5f + 0.5f * std::tanh((x - 0.5f) * 2.0f);
+      } else if (x < -0.5f) {
+        x = -0.5f + 0.5f * std::tanh((x + 0.5f) * 2.0f);
+      }
+      output[i] = x;
     }
-    output[i] = x;
   }
 
   return oboe::DataCallbackResult::Continue;

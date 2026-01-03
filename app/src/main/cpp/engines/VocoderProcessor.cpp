@@ -68,8 +68,8 @@ void VocoderProcessor::process(const float *modulator, const float *carrier,
       lastDiff_ = diffusion;
     }
 
-    // Modulador: Preamplificación (xa normalizado en Kotlin ao 90%)
-    float modSample = modulator[frame] * 4.0f;
+    // Modulador: Preamplificación (10x balanceado con normalización de Kotlin)
+    float modSample = modulator[frame] * 10.0f;
 
     // Aplicar HPF para quitar retumbo de graves que causa acople
     modSample = mModHPF.process(modSample);
@@ -99,21 +99,13 @@ void VocoderProcessor::process(const float *modulator, const float *carrier,
         // SEMPRE procesamos o filtro da portadora para manter o seu estado
         float filteredCar = band.carFilter.process(carSample);
 
-        // Porta de ruído suave (Soft Gate) por banda
-        float gain = 0.0f;
-        if (envelope > threshold) {
-          gain = 1.0f;
-        } else if (envelope >
-                   threshold *
-                       0.4f) { // Máis agresivo que antes (0.4 en lugar de 0.25)
-          gain = (envelope - threshold * 0.4f) / (threshold * 0.6f);
-          gain = gain * gain;
-        }
+        // Lóxica de Bias de Aethereum: expulsor de ruído natural
+        // Protexemos mellor a enerxía do sobre orixinal
+        float gain = (envelope - threshold * 0.4f) * intensity;
+        if (gain < 0.0f)
+          gain = 0.0f;
 
-        // Compensación de ganancia por resonancia (Q): máis Q = menos volume
-        // sumado A resonancia baixa (bandas anchas) suma moita máis enerxía
-        float qComp = 1.0f / (1.0f + std::max(0.0f, 25.0f - resonance) * 0.15f);
-        vocodeOutput += filteredCar * envelope * intensity * gain * qComp;
+        vocodeOutput += filteredCar * gain;
       }
     } else {
       // Aínda que a porta estea pechada, procesamos os filtros da portadora
@@ -124,9 +116,9 @@ void VocoderProcessor::process(const float *modulator, const float *carrier,
       }
     }
 
-    // Normalización mellorada: 2.5f para que teña pegada e non se perda
-    // (antes 1.0f)
-    vocodeOutput *= (2.5f * masterGate);
+    // Normalización: 0.8f (conservador como en Aethereum para evitar "whisper"
+    // por saturación)
+    vocodeOutput *= (0.8f * masterGate);
 
     // Blend mellorado (Equal Power / Log-like)
     // mix=0: só carrier. mix=1: só vocoder
@@ -165,15 +157,14 @@ void VocoderProcessor::setIntensity(float intensity) {
 }
 
 void VocoderProcessor::setResonance(float resonance) {
-  // Q de 10 a 25 (18 por defecto en referencia)
-  sResonance.setTarget(10.0f + resonance * 15.0f);
+  // Rango 12-22 (Aethereum usa 18). Máis de 22 soa moi "fino" e susurrado.
+  sResonance.setTarget(12.0f + resonance * 10.0f);
 }
 
 void VocoderProcessor::setNoiseThreshold(float threshold) {
-  // Limiar moito máis agresivo para que "Viscosidade" actúe de verdade
-  // Rango: 0.005 a 0.5 (con pre-gain de 4x e sinal de 3.6, isto é ata o 14% do
-  // pico)
-  sNoiseThreshold.setTarget(0.005f + threshold * 0.495f);
+  // Limiar máis próximo a Aethereum (0.005 a 0.2)
+  // Se subimos moito de 0.2 empezamos a perder as vogais (soa a susurro)
+  sNoiseThreshold.setTarget(0.005f + threshold * 0.195f);
 }
 
 void VocoderProcessor::setMix(float mix) {
@@ -186,7 +177,6 @@ void VocoderProcessor::setDiffusion(float diffusion) {
 }
 
 float VocoderProcessor::getModulatorRMS() {
-  // Normalizamos o nivel para a UI (rango 0-1)
-  // Cun pre-gain de 4x e sinal ao 90%, o pico anda por 3.6
-  return std::clamp(mGlobalMod.getLevel() / 4.0f, 0.0f, 1.0f);
+  // Normalización para a UI (10x pre-gain)
+  return std::clamp(mGlobalMod.getLevel() / 10.0f, 0.0f, 1.0f);
 }
